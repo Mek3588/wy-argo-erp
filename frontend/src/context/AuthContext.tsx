@@ -54,10 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const quickSwitchRole = async (targetRole: Role) => {
     const pinMap: Record<Role, string> = {
-      ADMIN: '1111',
-      MANAGER: '2222',
-      SALES_CASHIER: '3333',
-      INVENTORY_CLERK: '4444',
+      ADMIN: '111111',
+      MANAGER: '222222',
+      SALES_CASHIER: '333333',
+      INVENTORY_CLERK: '444444',
     };
 
     const pin = pinMap[targetRole];

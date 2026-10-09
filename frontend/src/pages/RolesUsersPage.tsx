@@ -375,18 +375,18 @@ export const RolesUsersPage: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {editingUser ? 'Change 4-Digit Login PIN (Optional)' : '4-Digit Login PIN'}
+              {editingUser ? 'Change 6-Digit Login PIN (Optional)' : '6-Digit Login PIN'}
             </label>
             <input
               type="text"
               maxLength={6}
-              placeholder={editingUser ? 'Leave blank to keep current PIN' : 'e.g. 5555'}
+              placeholder={editingUser ? 'Leave blank to keep current PIN' : 'e.g. 555555'}
               value={form.pin}
               onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono tracking-widest focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
             <p className="text-[11px] text-slate-400 mt-1">
-              Staff members use this numeric PIN to log into the ERP terminal.
+              Staff members use this 6-digit numeric PIN to log into the ERP terminal.
             </p>
           </div>
 

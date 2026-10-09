@@ -46,10 +46,10 @@ export const LoginPage: React.FC = () => {
 
   // Demo default PIN hints
   const demoPinHints: Record<string, string> = {
-    admin: '1111',
-    manager: '2222',
-    cashier: '3333',
-    inventory: '4444',
+    admin: '111111',
+    manager: '222222',
+    cashier: '333333',
+    inventory: '444444',
   };
 
   const roleColors: Record<Role, { badge: string; border: string; bg: string }> = {
@@ -78,7 +78,7 @@ export const LoginPage: React.FC = () => {
   // Submit PIN
   const handlePinSubmit = useCallback(
     async (pinToSubmit: string) => {
-      if (pinToSubmit.length < 4 || submitting) return;
+      if (pinToSubmit.length < 6 || submitting) return;
 
       try {
         setSubmitting(true);
@@ -100,7 +100,7 @@ export const LoginPage: React.FC = () => {
     const newPin = pin + num;
     setPin(newPin);
     setError(null);
-    if (newPin.length === 4) {
+    if (newPin.length === 6) {
       handlePinSubmit(newPin);
     }
   };
@@ -135,7 +135,7 @@ export const LoginPage: React.FC = () => {
 
   // Fast auto-login button for demo convenience
   const handleAutoFillAndLogin = (staff: StaffMember) => {
-    const hint = demoPinHints[staff.username] || '1111';
+    const hint = demoPinHints[staff.username] || '111111';
     setSelectedStaff(staff);
     setPin(hint);
     handlePinSubmit(hint);
@@ -263,18 +263,18 @@ export const LoginPage: React.FC = () => {
                   {selectedStaff?.full_name || 'Select Staff Member'}
                 </div>
                 <div className="text-[11px] text-blue-400 font-mono mt-0.5">
-                  Demo PIN: {selectedStaff ? demoPinHints[selectedStaff.username] || '1111' : '1111'}
+                  Demo PIN: {selectedStaff ? demoPinHints[selectedStaff.username] || '111111' : '111111'}
                 </div>
               </div>
 
-              {/* 4-digit PIN Visual Indicator Dots */}
-              <div className="flex items-center justify-center gap-4 mb-6">
-                {[0, 1, 2, 3].map((idx) => {
+              {/* 6-digit PIN Visual Indicator Dots */}
+              <div className="flex items-center justify-center gap-3 mb-6">
+                {[0, 1, 2, 3, 4, 5].map((idx) => {
                   const isFilled = pin.length > idx;
                   return (
                     <div
                       key={idx}
-                      className={`w-4 h-4 rounded-full transition-all duration-150 ${
+                      className={`w-3.5 h-3.5 rounded-full transition-all duration-150 ${
                         isFilled
                           ? 'bg-blue-500 shadow-md shadow-blue-500/50 scale-110'
                           : 'border-2 border-slate-700 bg-slate-800/40'

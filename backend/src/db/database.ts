@@ -144,12 +144,12 @@ export function initializeDatabase() {
     // Column already exists
   }
 
-  // Update existing users with default PINs if empty
+  // Update existing users with 6-digit default PINs
   const salt = bcrypt.genSaltSync(10);
-  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'admin' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('1111', salt));
-  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'manager' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('2222', salt));
-  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'cashier' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('3333', salt));
-  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'inventory' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('4444', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'admin'").run(bcrypt.hashSync('111111', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'manager'").run(bcrypt.hashSync('222222', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'cashier'").run(bcrypt.hashSync('333333', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'inventory'").run(bcrypt.hashSync('444444', salt));
 
   // Seed default demo data if users are empty
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
@@ -167,10 +167,10 @@ function seedDemoData() {
   const cashierPass = bcrypt.hashSync('cashier123', salt);
   const inventoryPass = bcrypt.hashSync('inventory123', salt);
 
-  const adminPin = bcrypt.hashSync('1111', salt);
-  const managerPin = bcrypt.hashSync('2222', salt);
-  const cashierPin = bcrypt.hashSync('3333', salt);
-  const inventoryPin = bcrypt.hashSync('4444', salt);
+  const adminPin = bcrypt.hashSync('111111', salt);
+  const managerPin = bcrypt.hashSync('222222', salt);
+  const cashierPin = bcrypt.hashSync('333333', salt);
+  const inventoryPin = bcrypt.hashSync('444444', salt);
 
   // 1. Insert Users
   const insertUser = db.prepare(`

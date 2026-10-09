@@ -51,14 +51,14 @@ Includes **Inventory Management** (with perishable batch tracking & FEFO stock d
 
 ---
 
-## 🔑 Pre-Seeded Demo User Accounts
+## 🔑 Pre-Seeded Staff Accounts & 6-Digit PINs
 
-| Role | Username / Email | Password | Description |
-| :--- | :--- | :--- | :--- |
-| **Administrator** | `admin@wyargo.com` | `admin123` | Full administrative control |
-| **Dairy Manager** | `manager@wyargo.com` | `manager123` | Production, sales & financial operations |
-| **Sales Cashier** | `cashier@wyargo.com` | `cashier123` | Front-desk cashier & retail billing |
-| **Inventory Clerk** | `inventory@wyargo.com` | `inventory123` | Cold-room intake & wastage recording |
+| Role | Staff Name | Username / Email | 6-Digit PIN | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **Administrator** | Abebe Bikila | `admin@wyargo.com` | `111111` | Full administrative & financial control |
+| **Dairy Manager** | Sara Tadesse | `manager@wyargo.com` | `222222` | Operations, inventory, sales & cash flow |
+| **Sales Cashier** | Dawit Haile | `cashier@wyargo.com` | `333333` | Front-desk cashier & retail billing |
+| **Inventory Clerk** | Marta Girma | `inventory@wyargo.com` | `444444` | Cold-room batch intake & wastage logs |
 
 ---
 
