@@ -91,7 +91,7 @@ export const api = {
 
   // Inventory
   getProducts: () => request<{ products: Product[] }>('/inventory/products'),
-  createProduct: (data: Partial<Product>) =>
+  createProduct: (data: Partial<Product> & { initial_stock?: number }) =>
     request<{ message: string; product: Product }>('/inventory/products', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -101,23 +101,19 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  getBatches: () => request<{ batches: Batch[] }>('/inventory/batches'),
-  createBatch: (data: {
+  stockIn: (data: {
     product_id: number;
-    batch_number: string;
     quantity: number;
-    production_date: string;
-    expiry_date: string;
-    cost_per_unit: number;
+    cost_per_unit?: number;
+    reference_note?: string;
   }) =>
-    request<{ message: string; batch: Batch }>('/inventory/batches', {
+    request<{ message: string }>('/inventory/stock-in', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  adjustInventory: (data: {
-    batch_id: number;
+  adjustStock: (data: {
+    product_id: number;
     quantity: number;
-    type: 'SPOILAGE_WASTE' | 'ADJUSTMENT';
     reason: string;
   }) =>
     request<{ message: string }>('/inventory/adjust', {
@@ -127,11 +123,19 @@ export const api = {
   getInventoryLogs: () => request<{ logs: InventoryLog[] }>('/inventory/logs'),
 
   // Sales
-  getSales: () => request<{ sales: Sale[] }>('/sales'),
+  getSales: (params?: { search?: string; date?: string; category?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.date) query.append('date', params.date);
+    if (params?.category) query.append('category', params.category);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<{ sales: Sale[] }>(`/sales${qs}`);
+  },
   getSaleDetails: (id: number) => request<{ sale: Sale; items: any[] }>(`/sales/${id}`),
   createSale: (saleData: {
     customer_name?: string;
     customer_phone?: string;
+    sale_category?: string;
     payment_method: string;
     discount?: number;
     notes?: string;
@@ -139,6 +143,19 @@ export const api = {
   }) =>
     request<{ message: string; sale: Sale }>('/sales', {
       method: 'POST',
+      body: JSON.stringify(saleData),
+    }),
+  updateSale: (id: number, saleData: {
+    customer_name?: string;
+    customer_phone?: string;
+    sale_category?: string;
+    payment_method?: string;
+    discount?: number;
+    notes?: string;
+    items?: Array<{ product_id: number; quantity: number; unit_price?: number }>;
+  }) =>
+    request<{ message: string; sale: Sale }>(`/sales/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(saleData),
     }),
 

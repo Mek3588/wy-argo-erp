@@ -5,19 +5,51 @@ import { authenticateToken, authorizeRoles, AuthRequest } from '../middleware/au
 const router = Router();
 router.use(authenticateToken);
 
-// GET /api/sales - List sales orders
-router.get('/', (_req: AuthRequest, res: Response): void => {
+// GET /api/sales - List sales orders with search, date & category filter
+router.get('/', (req: AuthRequest, res: Response): void => {
   try {
-    const sales = db.prepare(`
+    const { search, date, category } = req.query;
+
+    let query = `
       SELECT 
         s.*,
         u.full_name as cashier_name,
         (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as item_count
       FROM sales s
       LEFT JOIN users u ON s.recorded_by_user_id = u.id
-      ORDER BY s.created_at DESC
-      LIMIT 100
-    `).all();
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (date) {
+      query += ` AND date(s.created_at) = date(?)`;
+      params.push(date);
+    }
+
+    if (category && category !== 'ALL') {
+      query += ` AND s.sale_category = ?`;
+      params.push(category);
+    }
+
+    if (search) {
+      const term = `%${search}%`;
+      query += ` AND (
+        s.sale_code LIKE ? OR
+        s.customer_name LIKE ? OR
+        s.customer_phone LIKE ? OR
+        u.full_name LIKE ? OR
+        EXISTS (
+          SELECT 1 FROM sale_items si 
+          JOIN products p ON si.product_id = p.id 
+          WHERE si.sale_id = s.id AND p.name LIKE ?
+        )
+      )`;
+      params.push(term, term, term, term, term);
+    }
+
+    query += ` ORDER BY s.created_at DESC LIMIT 200`;
+
+    const sales = db.prepare(query).all(...params);
 
     res.json({ sales });
   } catch (err: any) {
@@ -45,11 +77,9 @@ router.get('/:id', (req: AuthRequest, res: Response): void => {
       SELECT 
         si.*,
         p.name as product_name,
-        p.unit as product_unit,
-        b.batch_number
+        p.unit as product_unit
       FROM sale_items si
       JOIN products p ON si.product_id = p.id
-      LEFT JOIN batches b ON si.batch_id = b.id
       WHERE si.sale_id = ?
     `).all(saleId);
 
@@ -62,7 +92,7 @@ router.get('/:id', (req: AuthRequest, res: Response): void => {
 interface CreateSaleItem {
   product_id: number;
   quantity: number;
-  unit_price?: number; // optional, defaults to product unit_price
+  unit_price?: number;
 }
 
 // POST /api/sales - Create sale (Any role with sales permission)
@@ -71,6 +101,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
     const {
       customer_name,
       customer_phone,
+      sale_category = 'Retail / Walk-in',
       payment_method,
       discount = 0,
       notes,
@@ -78,6 +109,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
     }: {
       customer_name?: string;
       customer_phone?: string;
+      sale_category?: string;
       payment_method: 'CASH' | 'TELEBIRR' | 'BANK_TRANSFER' | 'CREDIT';
       discount?: number;
       notes?: string;
@@ -95,7 +127,6 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       return;
     }
 
-    // Execute transaction: verify stock, pick earliest expiring batch (FEFO), deduct stock, create sale, create cash flow entry
     const executeSale = db.transaction(() => {
       let subtotal = 0;
       const verifiedItems: Array<{
@@ -118,12 +149,12 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
           throw new Error(`Quantity for ${prod.name} must be greater than 0`);
         }
 
-        // Find available batches sorted by earliest expiry date (FEFO - First Expired First Out)
+        // Available batches (ignoring expiry)
         const availableBatches = db.prepare(`
-          SELECT id, batch_number, current_quantity, expiry_date
+          SELECT id, batch_number, current_quantity
           FROM batches
-          WHERE product_id = ? AND status = 'ACTIVE' AND current_quantity > 0 AND date(expiry_date) >= date('now')
-          ORDER BY expiry_date ASC
+          WHERE product_id = ? AND status = 'ACTIVE' AND current_quantity > 0
+          ORDER BY id ASC
         `).all(item.product_id) as any[];
 
         const totalAvail = availableBatches.reduce((acc, b) => acc + b.current_quantity, 0);
@@ -140,10 +171,9 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
 
           db.prepare('UPDATE batches SET current_quantity = ?, status = ? WHERE id = ?').run(newQty, newStatus, batch.id);
 
-          // Log movement
           db.prepare(`
             INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id)
-            VALUES (?, ?, 'SALE', ?, 'Customer purchase', ?)
+            VALUES (?, ?, 'SALE', ?, 'Customer sale', ?)
           `).run(prod.id, batch.id, take, req.user?.id);
 
           const lineSubtotal = take * price;
@@ -167,14 +197,15 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       // Insert sale
       const saleResult = db.prepare(`
         INSERT INTO sales (
-          sale_code, customer_name, customer_phone, payment_method, payment_status,
+          sale_code, customer_name, customer_phone, sale_category, payment_method, payment_status,
           subtotal, discount, total_amount, recorded_by_user_id, notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         saleCode,
         customer_name || 'Walk-in Customer',
         customer_phone || '',
+        sale_category,
         payment_method,
         payment_method === 'CREDIT' ? 'PENDING' : 'PAID',
         subtotal,
@@ -186,7 +217,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
 
       const saleId = saleResult.lastInsertRowid;
 
-      // Insert sale line items
+      // Insert line items
       const insertLine = db.prepare(`
         INSERT INTO sale_items (sale_id, product_id, batch_id, quantity, unit_price, subtotal)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -196,7 +227,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
         insertLine.run(saleId, vi.product_id, vi.batch_id, vi.quantity, vi.unit_price, vi.subtotal);
       }
 
-      // If paid, record in Cash Flow ledger
+      // Record in Cash Flow if paid
       if (payment_method !== 'CREDIT') {
         db.prepare(`
           INSERT INTO cash_transactions (type, source, reference_id, amount, payment_method, description, recorded_by_user_id)
@@ -205,7 +236,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
           saleId,
           totalAmount,
           payment_method,
-          `Sale ${saleCode} - ${customer_name || 'Walk-in'}`,
+          `Sale ${saleCode} [${sale_category}] - ${customer_name || 'Walk-in'}`,
           req.user?.id
         );
       }
@@ -225,5 +256,151 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
   }
 });
 
-export default router;
+// PUT /api/sales/:id - Edit already sold sale record (Manager & Admin only)
+router.put('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: Response): void => {
+  try {
+    const saleId = Number(req.params.id);
+    const existing = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId) as any;
 
+    if (!existing) {
+      res.status(404).json({ error: 'Sale record not found' });
+      return;
+    }
+
+    const {
+      customer_name,
+      customer_phone,
+      sale_category,
+      payment_method,
+      discount,
+      notes,
+      items,
+    } = req.body;
+
+    const executeEdit = db.transaction(() => {
+      let newSubtotal = existing.subtotal;
+      let newDiscount = discount !== undefined ? Number(discount) : existing.discount;
+      let newPaymentMethod = payment_method || existing.payment_method;
+      let newCategory = sale_category || existing.sale_category;
+      let newCustName = customer_name !== undefined ? customer_name : existing.customer_name;
+      let newCustPhone = customer_phone !== undefined ? customer_phone : existing.customer_phone;
+      let newNotes = notes !== undefined ? notes : existing.notes;
+
+      // If items changed, restore old items and deduct new items
+      if (items && Array.isArray(items) && items.length > 0) {
+        // 1. Revert previous sale items stock
+        const oldItems = db.prepare('SELECT product_id, batch_id, quantity FROM sale_items WHERE sale_id = ?').all(saleId) as any[];
+        for (const oldItem of oldItems) {
+          if (oldItem.batch_id) {
+            db.prepare('UPDATE batches SET current_quantity = current_quantity + ?, status = "ACTIVE" WHERE id = ?')
+              .run(oldItem.quantity, oldItem.batch_id);
+          }
+        }
+
+        // Delete old sale items
+        db.prepare('DELETE FROM sale_items WHERE sale_id = ?').run(saleId);
+
+        // 2. Process and deduct new items
+        newSubtotal = 0;
+        const insertLine = db.prepare(`
+          INSERT INTO sale_items (sale_id, product_id, batch_id, quantity, unit_price, subtotal)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const item of items) {
+          const prod = db.prepare('SELECT id, name, unit_price FROM products WHERE id = ? AND is_active = 1').get(item.product_id) as any;
+          if (!prod) {
+            throw new Error(`Product ID ${item.product_id} not found or inactive`);
+          }
+
+          const price = item.unit_price ?? prod.unit_price;
+          let qtyNeeded = Number(item.quantity);
+          if (qtyNeeded <= 0) {
+            throw new Error(`Quantity for ${prod.name} must be greater than 0`);
+          }
+
+          const availableBatches = db.prepare(`
+            SELECT id, current_quantity
+            FROM batches
+            WHERE product_id = ? AND status = 'ACTIVE' AND current_quantity > 0
+            ORDER BY id ASC
+          `).all(item.product_id) as any[];
+
+          const totalAvail = availableBatches.reduce((acc, b) => acc + b.current_quantity, 0);
+          if (totalAvail < qtyNeeded) {
+            throw new Error(`Insufficient stock for "${prod.name}" when updating sale. Requested: ${qtyNeeded}, Available: ${totalAvail}`);
+          }
+
+          for (const batch of availableBatches) {
+            if (qtyNeeded <= 0) break;
+            const take = Math.min(batch.current_quantity, qtyNeeded);
+            const newQty = batch.current_quantity - take;
+            const newStatus = newQty === 0 ? 'DEPLETED' : 'ACTIVE';
+
+            db.prepare('UPDATE batches SET current_quantity = ?, status = ? WHERE id = ?').run(newQty, newStatus, batch.id);
+
+            const lineSubtotal = take * price;
+            newSubtotal += lineSubtotal;
+
+            insertLine.run(saleId, prod.id, batch.id, take, price, lineSubtotal);
+            qtyNeeded -= take;
+          }
+        }
+      }
+
+      const newTotal = Math.max(0, newSubtotal - newDiscount);
+
+      // Update sales table
+      db.prepare(`
+        UPDATE sales
+        SET customer_name = ?,
+            customer_phone = ?,
+            sale_category = ?,
+            payment_method = ?,
+            subtotal = ?,
+            discount = ?,
+            total_amount = ?,
+            notes = ?
+        WHERE id = ?
+      `).run(
+        newCustName,
+        newCustPhone,
+        newCategory,
+        newPaymentMethod,
+        newSubtotal,
+        newDiscount,
+        newTotal,
+        newNotes,
+        saleId
+      );
+
+      // Update Cash Flow transaction to keep books clean
+      db.prepare(`
+        UPDATE cash_transactions
+        SET amount = ?,
+            payment_method = ?,
+            description = ?
+        WHERE source = 'SALE' AND reference_id = ?
+      `).run(
+        newTotal,
+        newPaymentMethod,
+        `Sale ${existing.sale_code} [${newCategory}] - ${newCustName} (Edited by Manager)`,
+        saleId
+      );
+
+      return saleId;
+    });
+
+    executeEdit();
+    const updated = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId);
+
+    res.json({
+      message: 'Sale record corrected and updated successfully',
+      sale: updated,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+export default router;

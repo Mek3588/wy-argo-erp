@@ -92,6 +92,7 @@ export interface Sale {
   sale_code: string;
   customer_name: string;
   customer_phone?: string;
+  sale_category?: string;
   payment_method: PaymentMethod;
   payment_status: 'PAID' | 'PENDING';
   subtotal: number;
@@ -170,9 +171,8 @@ export interface DashboardStats {
   cashTotals: { total_in: number; total_out: number; net_cash: number };
   inventory: {
     activeProductsCount: number;
-    expiringBatchesCount: number;
+    totalStockQty?: number;
     lowStockProductsCount: number;
-    expiringBatches: Batch[];
     lowStockProducts: Product[];
   };
   recentSales: Sale[];

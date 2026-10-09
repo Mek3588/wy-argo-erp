@@ -77,6 +77,7 @@ export function initializeDatabase() {
       sale_code TEXT UNIQUE NOT NULL,
       customer_name TEXT DEFAULT 'Walk-in Customer',
       customer_phone TEXT,
+      sale_category TEXT DEFAULT 'Retail / Walk-in',
       payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT')) NOT NULL,
       payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING')) DEFAULT 'PAID',
       subtotal REAL NOT NULL,
@@ -140,6 +141,13 @@ export function initializeDatabase() {
   // Migration check: Ensure pin_hash column exists
   try {
     db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT;`);
+  } catch (e) {
+    // Column already exists
+  }
+
+  // Migration check: Ensure sale_category column exists
+  try {
+    db.exec(`ALTER TABLE sales ADD COLUMN sale_category TEXT DEFAULT 'Retail / Walk-in';`);
   } catch (e) {
     // Column already exists
   }

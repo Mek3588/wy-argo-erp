@@ -44,29 +44,20 @@ router.get('/stats', (_req: AuthRequest, res: Response): void => {
 
     const netCash = cashTotals.total_in - cashTotals.total_out;
 
-    // 4. Inventory counts
+    // 4. Inventory counts (Simple stock tracking without expiry calculations)
     const activeProductsCount = (db.prepare('SELECT COUNT(*) as count FROM products WHERE is_active = 1').get() as any).count;
 
-    // Batches expiring within 3 days
-    const expiringBatches = db.prepare(`
-      SELECT 
-        b.id, b.batch_number, b.current_quantity, b.expiry_date,
-        p.name as product_name, p.unit,
-        CAST(julianday(b.expiry_date) - julianday('now') AS INTEGER) as days_left
-      FROM batches b
-      JOIN products p ON b.product_id = p.id
-      WHERE b.status = 'ACTIVE' 
-        AND b.current_quantity > 0 
-        AND date(b.expiry_date) <= date('now', '+3 days')
-      ORDER BY b.expiry_date ASC
-      LIMIT 10
-    `).all();
+    const totalStockQty = (db.prepare(`
+      SELECT COALESCE(SUM(current_quantity), 0) as total
+      FROM batches
+      WHERE status = 'ACTIVE'
+    `).get() as any).total;
 
     // Low stock products
     const lowStockProducts = db.prepare(`
       SELECT 
         p.id, p.sku, p.name, p.min_stock_level, p.unit,
-        COALESCE(SUM(CASE WHEN b.status = 'ACTIVE' AND date(b.expiry_date) >= date('now') THEN b.current_quantity ELSE 0 END), 0) as current_stock
+        COALESCE(SUM(CASE WHEN b.status = 'ACTIVE' THEN b.current_quantity ELSE 0 END), 0) as current_stock
       FROM products p
       LEFT JOIN batches b ON p.id = b.product_id
       WHERE p.is_active = 1
@@ -104,9 +95,8 @@ router.get('/stats', (_req: AuthRequest, res: Response): void => {
       },
       inventory: {
         activeProductsCount,
-        expiringBatchesCount: expiringBatches.length,
+        totalStockQty,
         lowStockProductsCount: lowStockProducts.length,
-        expiringBatches,
         lowStockProducts
       },
       recentSales,
@@ -118,4 +108,3 @@ router.get('/stats', (_req: AuthRequest, res: Response): void => {
 });
 
 export default router;
-

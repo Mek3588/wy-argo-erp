@@ -11,9 +11,7 @@ router.get('/products', (_req: AuthRequest, res: Response): void => {
     const products = db.prepare(`
       SELECT 
         p.*,
-        COALESCE(SUM(CASE WHEN b.status = 'ACTIVE' AND date(b.expiry_date) >= date('now') THEN b.current_quantity ELSE 0 END), 0) as current_stock,
-        COUNT(CASE WHEN b.status = 'ACTIVE' AND date(b.expiry_date) >= date('now') THEN b.id END) as active_batches_count,
-        COALESCE(SUM(CASE WHEN b.status = 'ACTIVE' AND date(b.expiry_date) < date('now') THEN b.current_quantity ELSE 0 END), 0) as expired_stock
+        COALESCE(SUM(CASE WHEN b.status = 'ACTIVE' THEN b.current_quantity ELSE 0 END), 0) as current_stock
       FROM products p
       LEFT JOIN batches b ON p.id = b.product_id
       WHERE p.is_active = 1
@@ -30,7 +28,7 @@ router.get('/products', (_req: AuthRequest, res: Response): void => {
 // POST /api/inventory/products - Add product (Admin, Manager, Inventory Clerk)
 router.post('/products', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
   try {
-    const { sku, name, category, unit, min_stock_level, unit_cost, unit_price, description } = req.body;
+    const { sku, name, category, unit, min_stock_level, unit_cost, unit_price, description, initial_stock = 0 } = req.body;
 
     if (!sku || !name || !category || !unit || unit_cost === undefined || unit_price === undefined) {
       res.status(400).json({ error: 'SKU, name, category, unit, unit_cost, and unit_price are required' });
@@ -43,12 +41,34 @@ router.post('/products', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), 
       return;
     }
 
-    const insert = db.prepare(`
-      INSERT INTO products (sku, name, category, unit, min_stock_level, unit_cost, unit_price, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(sku, name, category, unit, min_stock_level || 10, unit_cost, unit_price, description || '');
+    const tx = db.transaction(() => {
+      const insert = db.prepare(`
+        INSERT INTO products (sku, name, category, unit, min_stock_level, unit_cost, unit_price, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(sku, name, category, unit, min_stock_level || 10, unit_cost, unit_price, description || '');
 
-    const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(insert.lastInsertRowid);
+      const newId = insert.lastInsertRowid;
+
+      if (Number(initial_stock) > 0) {
+        const batchCode = `STK-${Date.now().toString().slice(-6)}`;
+        const today = new Date().toISOString().split('T')[0];
+
+        db.prepare(`
+          INSERT INTO batches (product_id, batch_number, initial_quantity, current_quantity, production_date, expiry_date, cost_per_unit, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+        `).run(newId, batchCode, initial_stock, initial_stock, today, '2099-12-31', unit_cost);
+
+        db.prepare(`
+          INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id)
+          VALUES (?, null, 'STOCK_IN', ?, 'Initial inventory balance', ?)
+        `).run(newId, initial_stock, req.user?.id);
+      }
+
+      return newId;
+    });
+
+    const newProductId = tx();
+    const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(newProductId);
     res.status(201).json({ message: 'Product created successfully', product: newProduct });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -82,109 +102,92 @@ router.put('/products/:id', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'
   }
 });
 
-// GET /api/inventory/batches - List dairy batches with freshness status
-router.get('/batches', (_req: AuthRequest, res: Response): void => {
+// POST /api/inventory/stock-in - Quick Stock In
+router.post('/stock-in', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
   try {
-    const batches = db.prepare(`
-      SELECT 
-        b.*,
-        p.name as product_name,
-        p.sku as product_sku,
-        p.category as product_category,
-        p.unit as product_unit,
-        CAST(julianday(b.expiry_date) - julianday('now') AS INTEGER) as days_to_expiry
-      FROM batches b
-      JOIN products p ON b.product_id = p.id
-      ORDER BY b.expiry_date ASC
-    `).all();
+    const { product_id, quantity, cost_per_unit, reference_note } = req.body;
 
-    res.json({ batches });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/inventory/batches - Stock In / New dairy batch
-router.post('/batches', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
-  try {
-    const { product_id, batch_number, quantity, production_date, expiry_date, cost_per_unit } = req.body;
-
-    if (!product_id || !batch_number || !quantity || !production_date || !expiry_date || cost_per_unit === undefined) {
-      res.status(400).json({ error: 'All batch fields are required (product, batch#, qty, prod date, exp date, cost)' });
+    if (!product_id || !quantity || Number(quantity) <= 0) {
+      res.status(400).json({ error: 'Product and positive quantity are required' });
       return;
     }
 
-    const product = db.prepare('SELECT id, name FROM products WHERE id = ?').get(product_id) as any;
+    const product = db.prepare('SELECT id, name, unit_cost FROM products WHERE id = ?').get(product_id) as any;
     if (!product) {
       res.status(404).json({ error: 'Product not found' });
       return;
     }
 
+    const numQty = Number(quantity);
+    const unitCost = cost_per_unit !== undefined ? Number(cost_per_unit) : product.unit_cost;
+    const batchCode = `STK-${Date.now().toString().slice(-6)}`;
+    const today = new Date().toISOString().split('T')[0];
+
     const tx = db.transaction(() => {
       const insert = db.prepare(`
         INSERT INTO batches (product_id, batch_number, initial_quantity, current_quantity, production_date, expiry_date, cost_per_unit, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
-      `).run(product_id, batch_number, quantity, quantity, production_date, expiry_date, cost_per_unit);
+      `).run(product_id, batchCode, numQty, numQty, today, '2099-12-31', unitCost);
 
       const batchId = insert.lastInsertRowid;
 
-      // Log movement
       db.prepare(`
         INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id)
         VALUES (?, ?, 'STOCK_IN', ?, ?, ?)
-      `).run(product_id, batchId, quantity, `Initial stock intake for batch ${batch_number}`, req.user?.id);
+      `).run(product_id, batchId, numQty, reference_note || 'Stock intake', req.user?.id);
 
       return batchId;
     });
 
-    const newBatchId = tx();
-    const newBatch = db.prepare(`
-      SELECT b.*, p.name as product_name, p.unit as product_unit
-      FROM batches b JOIN products p ON b.product_id = p.id
-      WHERE b.id = ?
-    `).get(newBatchId);
-
-    res.status(201).json({ message: 'Stock-in recorded successfully', batch: newBatch });
+    tx();
+    res.status(201).json({ message: `Successfully added ${numQty} units to stock` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/inventory/adjust - Record Spoilage/Wastage or Inventory Adjustment
+// POST /api/inventory/adjust - Record Stock Adjustment / Loss / Spoilage
 router.post('/adjust', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
   try {
-    const { batch_id, quantity, type, reason } = req.body;
+    const { product_id, quantity, reason } = req.body;
 
-    if (!batch_id || !quantity || !type || !reason) {
-      res.status(400).json({ error: 'Batch, quantity, type (SPOILAGE_WASTE / ADJUSTMENT), and reason are required' });
+    if (!product_id || !quantity || Number(quantity) <= 0 || !reason) {
+      res.status(400).json({ error: 'Product, valid quantity, and reason are required' });
       return;
     }
 
-    const batch = db.prepare('SELECT * FROM batches WHERE id = ?').get(batch_id) as any;
-    if (!batch) {
-      res.status(404).json({ error: 'Batch not found' });
-      return;
-    }
+    const numQty = Number(quantity);
 
-    if (quantity > batch.current_quantity) {
-      res.status(400).json({ error: `Cannot adjust more than current stock in this batch (${batch.current_quantity})` });
+    // Find available stock
+    const availableBatches = db.prepare(`
+      SELECT id, current_quantity
+      FROM batches
+      WHERE product_id = ? AND status = 'ACTIVE' AND current_quantity > 0
+      ORDER BY id ASC
+    `).all(product_id) as any[];
+
+    const totalStock = availableBatches.reduce((sum, b) => sum + b.current_quantity, 0);
+    if (totalStock < numQty) {
+      res.status(400).json({ error: `Cannot deduct ${numQty}. Current stock available is only ${totalStock}` });
       return;
     }
 
     const tx = db.transaction(() => {
-      const remaining = batch.current_quantity - quantity;
-      const status = remaining <= 0 ? 'DEPLETED' : batch.status;
+      let needed = numQty;
+      for (const batch of availableBatches) {
+        if (needed <= 0) break;
+        const take = Math.min(batch.current_quantity, needed);
+        const newQty = batch.current_quantity - take;
+        const newStatus = newQty === 0 ? 'DEPLETED' : 'ACTIVE';
 
-      db.prepare(`
-        UPDATE batches
-        SET current_quantity = ?, status = ?
-        WHERE id = ?
-      `).run(remaining, status, batch_id);
+        db.prepare('UPDATE batches SET current_quantity = ?, status = ? WHERE id = ?').run(newQty, newStatus, batch.id);
+        needed -= take;
+      }
 
       db.prepare(`
         INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(batch.product_id, batch_id, type, quantity, reason, req.user?.id);
+        VALUES (?, null, 'ADJUSTMENT', ?, ?, ?)
+      `).run(product_id, numQty, reason, req.user?.id);
     });
 
     tx();
@@ -202,11 +205,9 @@ router.get('/logs', (_req: AuthRequest, res: Response): void => {
         l.*,
         p.name as product_name,
         p.unit as product_unit,
-        b.batch_number,
         u.full_name as user_name
       FROM inventory_logs l
       JOIN products p ON l.product_id = p.id
-      LEFT JOIN batches b ON l.batch_id = b.id
       LEFT JOIN users u ON l.user_id = u.id
       ORDER BY l.created_at DESC
       LIMIT 100
@@ -219,4 +220,3 @@ router.get('/logs', (_req: AuthRequest, res: Response): void => {
 });
 
 export default router;
-

@@ -205,103 +205,48 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       </div>
 
-      {/* Dairy Alerts Section: Expiring Batches & Low Stock */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Expiring Soon Alert */}
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-800 font-bold text-base">
-              <Clock className="w-5 h-5 text-amber-600" />
-              Perishable Dairy Batches (Expiring ≤ 3 Days)
-            </div>
-            <span className="bg-amber-200 text-amber-900 text-xs px-2.5 py-0.5 rounded-full font-bold">
-              {inventory.expiringBatchesCount} Batches
-            </span>
+      {/* Dairy Stock Alerts: Low Stock warning */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            Inventory Stock Alerts ({inventory.lowStockProductsCount} items need restock)
           </div>
-
-          <div className="mt-3 space-y-2">
-            {inventory.expiringBatches.length === 0 ? (
-              <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                All active dairy batches are within safe freshness dates!
-              </div>
-            ) : (
-              inventory.expiringBatches.map((b) => (
-                <div
-                  key={b.id}
-                  className="bg-white p-3 rounded-xl border border-amber-200 flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <span className="font-bold text-slate-800">{b.product_name}</span>
-                    <span className="ml-2 font-mono text-[11px] text-slate-500">[{b.batch_number}]</span>
-                    <p className="text-slate-500 mt-0.5">
-                      Remaining: <span className="font-semibold text-slate-800">{b.current_quantity} {b.unit}</span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span
-                      className={`font-bold px-2 py-1 rounded-md text-[11px] ${
-                        b.days_left !== undefined && b.days_left <= 1
-                          ? 'bg-rose-100 text-rose-700'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {b.days_left !== undefined && b.days_left <= 0
-                        ? 'Expires Today!'
-                        : `${b.days_left} days left`}
-                    </span>
-                    <p className="text-[10px] text-slate-400 mt-1">Exp: {b.expiry_date}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            Manage Stock →
+          </button>
         </div>
 
-        {/* Low Stock Alert */}
-        <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-rose-800 font-bold text-base">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
-              Low Stock Products (Below Reorder Point)
-            </div>
-            <span className="bg-rose-200 text-rose-900 text-xs px-2.5 py-0.5 rounded-full font-bold">
-              {inventory.lowStockProductsCount} Products
-            </span>
+        {inventory.lowStockProducts.length === 0 ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 p-3.5 rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>All dairy products meet minimum inventory levels. Stock on hand is healthy.</span>
           </div>
-
-          <div className="mt-3 space-y-2">
-            {inventory.lowStockProducts.length === 0 ? (
-              <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                All dairy products meet minimum inventory levels.
-              </div>
-            ) : (
-              inventory.lowStockProducts.map((p) => (
-                <div
-                  key={p.id}
-                  className="bg-white p-3 rounded-xl border border-rose-200 flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <span className="font-bold text-slate-800">{p.name}</span>
-                    <span className="ml-2 font-mono text-[11px] text-slate-500">[{p.sku}]</span>
-                    <p className="text-slate-500 mt-0.5">
-                      Min threshold:{' '}
-                      <span className="font-semibold text-slate-700">
-                        {p.min_stock_level} {p.unit}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="bg-rose-100 text-rose-800 font-bold px-2 py-1 rounded-md text-[11px]">
-                      Stock: {p.current_stock ?? 0} {p.unit}
-                    </span>
-                  </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {inventory.lowStockProducts.map((p) => (
+              <div
+                key={p.id}
+                className="bg-amber-50/50 p-3 rounded-xl border border-amber-200 flex items-center justify-between text-xs"
+              >
+                <div>
+                  <span className="font-bold text-slate-800">{p.name}</span>
+                  <p className="text-slate-500 mt-0.5">
+                    Reorder point: {p.min_stock_level} {p.unit}
+                  </p>
                 </div>
-              ))
-            )}
+                <div className="text-right">
+                  <span className="bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded-md text-[11px]">
+                    {p.current_stock ?? 0} {p.unit} left
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Recent Activity Split */}

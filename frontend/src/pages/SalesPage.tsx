@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { api } from '../api/client';
 import { Product, Sale, PaymentMethod } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -11,10 +12,12 @@ import {
   CheckCircle2,
   Receipt,
   Search,
-  CreditCard,
-  DollarSign,
-  Smartphone,
+  Download,
+  Calendar,
+  Filter,
   Eye,
+  Edit2,
+  RotateCcw,
 } from 'lucide-react';
 
 interface CartItem {
@@ -22,8 +25,19 @@ interface CartItem {
   quantity: number;
 }
 
+const SALE_CATEGORIES = [
+  'Retail / Walk-in',
+  'Morning Shift Sales',
+  'Evening Shift Sales',
+  'Wholesale / Cafe Delivery',
+  'Hotel & Restaurant Bulk',
+  'Route Distribution',
+];
+
 export const SalesPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const canEditSales = hasRole('ADMIN', 'MANAGER');
+
   const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -33,6 +47,7 @@ export const SalesPage: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [saleCategory, setSaleCategory] = useState('Retail / Walk-in');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState('');
@@ -40,15 +55,39 @@ export const SalesPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [saleSuccess, setSaleSuccess] = useState<Sale | null>(null);
 
+  // Search & Filter State in History
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterDate, setFilterDate] = useState<string>(todayStr);
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+
   // History detail modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<any[]>([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Edit Sale Modal State (for Manager / Admin)
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [editForm, setEditForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    sale_category: 'Retail / Walk-in',
+    payment_method: 'CASH' as PaymentMethod,
+    discount: 0,
+    notes: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [prodRes, saleRes] = await Promise.all([api.getProducts(), api.getSales()]);
+      const [prodRes, saleRes] = await Promise.all([
+        api.getProducts(),
+        api.getSales({
+          search: filterSearch || undefined,
+          date: filterDate || undefined,
+          category: filterCategory !== 'ALL' ? filterCategory : undefined,
+        }),
+      ]);
       setProducts(prodRes.products);
       setSales(saleRes.sales);
     } catch (err: any) {
@@ -60,7 +99,12 @@ export const SalesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [filterDate, filterCategory]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loadData();
+  };
 
   const addToCart = (product: Product) => {
     const existing = cart.find((item) => item.product.id === product.id);
@@ -78,7 +122,7 @@ export const SalesPage: React.FC = () => {
       );
     } else {
       if (available <= 0) {
-        alert(`Product "${product.name}" is out of stock!`);
+        alert(`Product "${product.name}" is currently out of stock!`);
         return;
       }
       setCart([...cart, { product, quantity: 1 }]);
@@ -108,7 +152,6 @@ export const SalesPage: React.FC = () => {
     setCart(cart.filter((item) => item.product.id !== productId));
   };
 
-  // Calculations
   const subtotal = cart.reduce((sum, item) => sum + item.product.unit_price * item.quantity, 0);
   const total = Math.max(0, subtotal - discount);
 
@@ -124,6 +167,7 @@ export const SalesPage: React.FC = () => {
       const payload = {
         customer_name: customerName,
         customer_phone: customerPhone,
+        sale_category: saleCategory,
         payment_method: paymentMethod,
         discount: Number(discount),
         notes,
@@ -139,6 +183,7 @@ export const SalesPage: React.FC = () => {
       setCart([]);
       setCustomerName('Walk-in Customer');
       setCustomerPhone('');
+      setSaleCategory('Retail / Walk-in');
       setDiscount(0);
       setNotes('');
       loadData();
@@ -151,15 +196,103 @@ export const SalesPage: React.FC = () => {
 
   const viewSaleDetails = async (sale: Sale) => {
     setSelectedSale(sale);
-    setLoadingDetails(true);
     try {
       const res = await api.getSaleDetails(sale.id);
       setSaleItems(res.items);
     } catch (err: any) {
       alert(`Failed to load items: ${err.message}`);
-    } finally {
-      setLoadingDetails(false);
     }
+  };
+
+  // Open Manager Edit Modal
+  const openEditModal = (sale: Sale) => {
+    setEditingSale(sale);
+    setEditForm({
+      customer_name: sale.customer_name,
+      customer_phone: sale.customer_phone || '',
+      sale_category: sale.sale_category || 'Retail / Walk-in',
+      payment_method: sale.payment_method,
+      discount: sale.discount || 0,
+      notes: sale.notes || '',
+    });
+  };
+
+  // Save Manager Edit
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSale) return;
+
+    try {
+      setSavingEdit(true);
+      await api.updateSale(editingSale.id, {
+        customer_name: editForm.customer_name,
+        customer_phone: editForm.customer_phone,
+        sale_category: editForm.sale_category,
+        payment_method: editForm.payment_method,
+        discount: Number(editForm.discount),
+        notes: editForm.notes,
+      });
+
+      setEditingSale(null);
+      alert('Sale corrected successfully! Stock and cash flow have been synchronized.');
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to update sale: ${err.message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Direct Excel (.xlsx) Export
+  const exportDailySalesToExcel = () => {
+    if (sales.length === 0) {
+      alert('No sales records to export for this selection.');
+      return;
+    }
+
+    const exportRows: Array<Record<string, any>> = sales.map((s, index) => ({
+      '#': index + 1,
+      'Receipt Code': s.sale_code,
+      'Date & Time': s.created_at,
+      'Sale Category': s.sale_category || 'Retail / Walk-in',
+      'Customer Name': s.customer_name,
+      'Customer Phone': s.customer_phone || '-',
+      'Cashier': s.cashier_name || 'System',
+      'Payment Method': s.payment_method,
+      'Payment Status': s.payment_status,
+      'Subtotal (ETB)': s.subtotal,
+      'Discount (ETB)': s.discount,
+      'Net Amount (ETB)': s.total_amount,
+      'Notes': s.notes || '',
+    }));
+
+    // Add totals row
+    const totalAmount = sales.reduce((acc, s) => acc + s.total_amount, 0);
+    const totalDiscount = sales.reduce((acc, s) => acc + s.discount, 0);
+    const totalSubtotal = sales.reduce((acc, s) => acc + s.subtotal, 0);
+
+    exportRows.push({
+      '#': '' as any,
+      'Receipt Code': 'TOTALS',
+      'Date & Time': '',
+      'Sale Category': '',
+      'Customer Name': '',
+      'Customer Phone': '',
+      'Cashier': '',
+      'Payment Method': '',
+      'Payment Status': '',
+      'Subtotal (ETB)': totalSubtotal,
+      'Discount (ETB)': totalDiscount,
+      'Net Amount (ETB)': totalAmount,
+      'Notes': `${sales.length} Total Sales`,
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Sales');
+
+    const fileName = `WY_Argo_Dairy_Sales_${filterDate || 'Report'}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   };
 
   const filteredProducts = products.filter(
@@ -168,14 +301,17 @@ export const SalesPage: React.FC = () => {
       p.sku.toLowerCase().includes(searchProduct.toLowerCase())
   );
 
+  // Daily totals summary
+  const dailyTotalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Sales & Cashier Counter</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Sales & Daily Billing</h2>
           <p className="text-sm text-slate-500">
-            Process counter orders, issue receipts, and update cash flow automatically.
+            Process orders, filter daily sales by category, export to Excel, and manage mistake edits.
           </p>
         </div>
 
@@ -190,7 +326,7 @@ export const SalesPage: React.FC = () => {
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            POS Register
+            POS Counter
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -201,7 +337,7 @@ export const SalesPage: React.FC = () => {
             }`}
           >
             <Receipt className="w-3.5 h-3.5" />
-            Sales Receipts ({sales.length})
+            Daily Sales & Receipts ({sales.length})
           </button>
         </div>
       </div>
@@ -250,7 +386,7 @@ export const SalesPage: React.FC = () => {
                               : 'text-emerald-600'
                           }`}
                         >
-                          {stock} {p.unit} left
+                          {stock} {p.unit} in stock
                         </span>
                       </div>
                       <h4 className="font-bold text-slate-900 mt-2 text-sm">{p.name}</h4>
@@ -299,10 +435,10 @@ export const SalesPage: React.FC = () => {
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto max-h-56 divide-y divide-slate-100 my-2">
+            <div className="flex-1 overflow-y-auto max-h-52 divide-y divide-slate-100 my-2">
               {cart.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-sm">
-                  Cart is empty. Select dairy products from the left to begin.
+                <div className="py-10 text-center text-slate-400 text-sm">
+                  Cart is empty. Select dairy products to begin.
                 </div>
               ) : (
                 cart.map((item) => (
@@ -342,11 +478,11 @@ export const SalesPage: React.FC = () => {
               )}
             </div>
 
-            {/* Customer & Checkout Form */}
+            {/* Billing Form */}
             <form onSubmit={handleCheckout} className="space-y-3 pt-3 border-t border-slate-100 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer Name</label>
                   <input
                     type="text"
                     value={customerName}
@@ -356,7 +492,7 @@ export const SalesPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Phone</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer Phone</label>
                   <input
                     type="text"
                     value={customerPhone}
@@ -365,6 +501,24 @@ export const SalesPage: React.FC = () => {
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* Sale Category Selection */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Daily Sales Category
+                </label>
+                <select
+                  value={saleCategory}
+                  onChange={(e) => setSaleCategory(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500 bg-white"
+                >
+                  {SALE_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Payment Method */}
@@ -434,62 +588,167 @@ export const SalesPage: React.FC = () => {
         </div>
       )}
 
-      {/* SALES HISTORY TAB */}
+      {/* SALES HISTORY & DAILY SALES VIEW */}
       {activeTab === 'history' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Receipt #</th>
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4">Cashier</th>
-                  <th className="py-3 px-4">Payment</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
-                  <th className="py-3 px-4 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {sales.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-blue-600">{s.sale_code}</td>
-                    <td className="py-3 px-4 text-xs text-slate-500">{s.created_at}</td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-900">{s.customer_name}</div>
-                      {s.customer_phone && (
-                        <div className="text-xs text-slate-400">{s.customer_phone}</div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-xs text-slate-700 font-medium">
-                      {s.cashier_name || 'System'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                        {s.payment_method}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right font-bold text-slate-900">
-                      {s.total_amount.toLocaleString()} ETB
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => viewSaleDetails(s)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="View Receipt"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
+        <div className="space-y-4">
+          {/* Daily Sales Filter Bar with Search & Excel Export */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row gap-3 justify-between items-center">
+              {/* Search Bar */}
+              <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search receipt, customer, item..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </form>
+
+              {/* Date Filter & Category Filter */}
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {/* Date Picker */}
+                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="bg-transparent border-none text-slate-800 font-semibold focus:outline-none"
+                  />
+                  {filterDate && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterDate('')}
+                      className="text-slate-400 hover:text-slate-600 text-[10px]"
+                      title="Clear date filter"
+                    >
+                      All
+                    </button>
+                  )}
+                </div>
+
+                {/* Category Dropdown */}
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
+                >
+                  <option value="ALL">All Sales Categories</option>
+                  {SALE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Direct Excel Download Button */}
+                <button
+                  onClick={exportDailySalesToExcel}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-all"
+                  title="Download directly as Microsoft Excel (.xlsx) file"
+                >
+                  <Download className="w-4 h-4" />
+                  Export to Excel (.xlsx)
+                </button>
+              </div>
+            </div>
+
+            {/* Daily Total Summary Strip */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 flex flex-wrap items-center justify-between text-xs gap-2">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-slate-500">Date Range: </span>
+                  <span className="font-bold text-slate-800">{filterDate || 'All Recorded Dates'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Receipts: </span>
+                  <span className="font-bold text-slate-800">{sales.length}</span>
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-500">Filtered Sales Revenue: </span>
+                <span className="font-bold text-emerald-600 text-sm">
+                  {dailyTotalAmount.toLocaleString()} ETB
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sales Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Receipt #</th>
+                    <th className="py-3 px-4">Date & Time</th>
+                    <th className="py-3 px-4">Sales Category</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Cashier</th>
+                    <th className="py-3 px-4">Payment</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-center">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {sales.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 font-mono font-semibold text-blue-600">{s.sale_code}</td>
+                      <td className="py-3 px-4 text-xs text-slate-500">{s.created_at}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          {s.sale_category || 'Retail / Walk-in'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-900">{s.customer_name}</div>
+                        {s.customer_phone && (
+                          <div className="text-xs text-slate-400">{s.customer_phone}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-slate-700 font-medium">
+                        {s.cashier_name || 'System'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          {s.payment_method}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-slate-900">
+                        {s.total_amount.toLocaleString()} ETB
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => viewSaleDetails(s)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Receipt"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {canEditSales && (
+                            <button
+                              onClick={() => openEditModal(s)}
+                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="Manager Edit: Correct mistake on already sold item"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: SALE DETAILS / RECEIPT */}
+      {/* MODAL 1: VIEW RECEIPT */}
       <Modal
         isOpen={!!selectedSale}
         onClose={() => setSelectedSale(null)}
@@ -500,6 +759,7 @@ export const SalesPage: React.FC = () => {
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between">
               <div>
                 <p className="font-bold text-slate-900 text-sm">WY Argo Dairy ERP</p>
+                <p className="text-slate-500">Category: {selectedSale.sale_category || 'Retail / Walk-in'}</p>
                 <p className="text-slate-500">Customer: {selectedSale.customer_name}</p>
                 <p className="text-slate-500">Cashier: {selectedSale.cashier_name}</p>
               </div>
@@ -515,7 +775,6 @@ export const SalesPage: React.FC = () => {
               <thead className="border-b border-slate-200 text-slate-400 font-semibold uppercase text-[10px]">
                 <tr>
                   <th className="py-2">Item</th>
-                  <th className="py-2">Batch</th>
                   <th className="py-2 text-center">Qty</th>
                   <th className="py-2 text-right">Unit Price</th>
                   <th className="py-2 text-right">Subtotal</th>
@@ -525,7 +784,6 @@ export const SalesPage: React.FC = () => {
                 {saleItems.map((item, idx) => (
                   <tr key={idx}>
                     <td className="py-2 font-medium text-slate-800">{item.product_name}</td>
-                    <td className="py-2 font-mono text-slate-500">{item.batch_number || '-'}</td>
                     <td className="py-2 text-center">
                       {item.quantity} {item.product_unit}
                     </td>
@@ -551,22 +809,126 @@ export const SalesPage: React.FC = () => {
         )}
       </Modal>
 
+      {/* MODAL 2: MANAGER EDIT SALE RECORD */}
+      <Modal
+        isOpen={!!editingSale}
+        onClose={() => setEditingSale(null)}
+        title={`Manager Correction: ${editingSale?.sale_code}`}
+      >
+        <form onSubmit={handleSaveEdit} className="space-y-4 text-sm">
+          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+            <b>Manager Privilege:</b> Correct customer details, sales category, payment channel, or discount for receipt #{editingSale?.sale_code}. This will also automatically adjust the Cash Flow ledger.
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Customer Name</label>
+              <input
+                required
+                type="text"
+                value={editForm.customer_name}
+                onChange={(e) => setEditForm({ ...editForm, customer_name: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Customer Phone</label>
+              <input
+                type="text"
+                value={editForm.customer_phone}
+                onChange={(e) => setEditForm({ ...editForm, customer_phone: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Sales Category</label>
+              <select
+                value={editForm.sale_category}
+                onChange={(e) => setEditForm({ ...editForm, sale_category: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-xs"
+              >
+                {SALE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Method</label>
+              <select
+                value={editForm.payment_method}
+                onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value as PaymentMethod })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-xs"
+              >
+                <option value="CASH">Cash</option>
+                <option value="TELEBIRR">Telebirr</option>
+                <option value="BANK_TRANSFER">Bank (CBE)</option>
+                <option value="CREDIT">Credit</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Discount Amount (ETB)</label>
+            <input
+              type="number"
+              min="0"
+              value={editForm.discount}
+              onChange={(e) => setEditForm({ ...editForm, discount: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Reason / Mistake Notes</label>
+            <textarea
+              rows={2}
+              placeholder="e.g. Cashier selected wrong payment channel / adjusted customer discount"
+              value={editForm.notes}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setEditingSale(null)}
+              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingEdit}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold shadow-xs"
+            >
+              {savingEdit ? 'Updating Sale...' : 'Save Corrections'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* SUCCESS MODAL POPUP */}
       <Modal
         isOpen={!!saleSuccess}
         onClose={() => setSaleSuccess(null)}
-        title="Sale Recorded Successfully!"
+        title="Sale Completed Successfully!"
       >
         <div className="text-center py-4 space-y-3">
           <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <h4 className="text-lg font-bold text-slate-900">
-            {saleSuccess?.total_amount.toLocaleString()} ETB Succeeded
+            {saleSuccess?.total_amount.toLocaleString()} ETB Received
           </h4>
           <p className="text-xs text-slate-500">
-            Receipt #{saleSuccess?.sale_code} settled via {saleSuccess?.payment_method}. Dairy stock
-            automatically deducted using First-Expired-First-Out batches, and Cash Flow ledger updated!
+            Receipt #{saleSuccess?.sale_code} settled under <b>{saleSuccess?.sale_category}</b> via{' '}
+            {saleSuccess?.payment_method}.
           </p>
           <div className="pt-3">
             <button
@@ -581,4 +943,3 @@ export const SalesPage: React.FC = () => {
     </div>
   );
 };
-
