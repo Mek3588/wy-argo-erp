@@ -12,7 +12,9 @@ router.use(authenticateToken);
 router.get('/', authorizeRoles('ADMIN', 'MANAGER'), (_req: AuthRequest, res: Response): void => {
   try {
     const users = db.prepare(`
-      SELECT id, username, email, full_name, role, is_active, created_at
+      SELECT 
+        id, username, email, full_name, role, is_active, created_at,
+        CASE WHEN pin_hash IS NOT NULL AND pin_hash != '' THEN 1 ELSE 0 END as has_pin
       FROM users
       ORDER BY created_at DESC
     `).all();
@@ -22,13 +24,13 @@ router.get('/', authorizeRoles('ADMIN', 'MANAGER'), (_req: AuthRequest, res: Res
   }
 });
 
-// POST /api/users - Create new user with assigned role (Admin only)
+// POST /api/users - Create new user with assigned role and PIN (Admin only)
 router.post('/', authorizeRoles('ADMIN'), (req: AuthRequest, res: Response): void => {
   try {
-    const { username, email, password, full_name, role } = req.body;
+    const { username, email, password, pin, full_name, role } = req.body;
 
-    if (!username || !email || !password || !full_name || !role) {
-      res.status(400).json({ error: 'All fields (username, email, password, full_name, role) are required' });
+    if (!username || !email || !full_name || !role) {
+      res.status(400).json({ error: 'Username, email, full name, and role are required' });
       return;
     }
 
@@ -46,15 +48,18 @@ router.post('/', authorizeRoles('ADMIN'), (req: AuthRequest, res: Response): voi
     }
 
     const salt = bcrypt.genSaltSync(10);
-    const password_hash = bcrypt.hashSync(password, salt);
+    const passToHash = password || '123456';
+    const password_hash = bcrypt.hashSync(passToHash, salt);
+    const pinToHash = pin ? String(pin).trim() : '1234';
+    const pin_hash = bcrypt.hashSync(pinToHash, salt);
 
     const result = db.prepare(`
-      INSERT INTO users (username, email, password_hash, full_name, role, is_active)
-      VALUES (?, ?, ?, ?, ?, 1)
-    `).run(username, email, password_hash, full_name, role);
+      INSERT INTO users (username, email, password_hash, pin_hash, full_name, role, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).run(username, email, password_hash, pin_hash, full_name, role);
 
     const newUser = db.prepare(`
-      SELECT id, username, email, full_name, role, is_active, created_at
+      SELECT id, username, email, full_name, role, is_active, created_at, 1 as has_pin
       FROM users WHERE id = ?
     `).get(result.lastInsertRowid);
 
@@ -64,11 +69,11 @@ router.post('/', authorizeRoles('ADMIN'), (req: AuthRequest, res: Response): voi
   }
 });
 
-// PUT /api/users/:id - Update user details or role (Admin only)
+// PUT /api/users/:id - Update user details, role or PIN (Admin only)
 router.put('/:id', authorizeRoles('ADMIN'), (req: AuthRequest, res: Response): void => {
   try {
     const userId = Number(req.params.id);
-    const { full_name, email, role, is_active, password } = req.body;
+    const { full_name, email, role, is_active, password, pin } = req.body;
 
     const existing = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId) as any;
     if (!existing) {
@@ -91,31 +96,31 @@ router.put('/:id', authorizeRoles('ADMIN'), (req: AuthRequest, res: Response): v
       return;
     }
 
+    const salt = bcrypt.genSaltSync(10);
+
+    db.prepare(`
+      UPDATE users
+      SET full_name = COALESCE(?, full_name),
+          email = COALESCE(?, email),
+          role = COALESCE(?, role),
+          is_active = COALESCE(?, is_active)
+      WHERE id = ?
+    `).run(full_name, email, role, is_active, userId);
+
     if (password) {
-      const salt = bcrypt.genSaltSync(10);
       const password_hash = bcrypt.hashSync(password, salt);
-      db.prepare(`
-        UPDATE users
-        SET full_name = COALESCE(?, full_name),
-            email = COALESCE(?, email),
-            role = COALESCE(?, role),
-            is_active = COALESCE(?, is_active),
-            password_hash = ?
-        WHERE id = ?
-      `).run(full_name, email, role, is_active, password_hash, userId);
-    } else {
-      db.prepare(`
-        UPDATE users
-        SET full_name = COALESCE(?, full_name),
-            email = COALESCE(?, email),
-            role = COALESCE(?, role),
-            is_active = COALESCE(?, is_active)
-        WHERE id = ?
-      `).run(full_name, email, role, is_active, userId);
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(password_hash, userId);
+    }
+
+    if (pin) {
+      const pin_hash = bcrypt.hashSync(String(pin).trim(), salt);
+      db.prepare('UPDATE users SET pin_hash = ? WHERE id = ?').run(pin_hash, userId);
     }
 
     const updatedUser = db.prepare(`
-      SELECT id, username, email, full_name, role, is_active, created_at
+      SELECT 
+        id, username, email, full_name, role, is_active, created_at,
+        CASE WHEN pin_hash IS NOT NULL AND pin_hash != '' THEN 1 ELSE 0 END as has_pin
       FROM users WHERE id = ?
     `).get(userId);
 

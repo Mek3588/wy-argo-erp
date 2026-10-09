@@ -144,3 +144,4 @@ router.delete('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res
 });
 
 export default router;
+

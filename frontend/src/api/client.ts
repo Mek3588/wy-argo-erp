@@ -57,6 +57,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ login, password }),
     }),
+  getStaffList: () => request<{ staff: import('../types').StaffMember[] }>('/auth/staff-list'),
+  pinLogin: (pin: string, user_id?: number) =>
+    request<{ token: string; user: User; message: string }>('/auth/pin-login', {
+      method: 'POST',
+      body: JSON.stringify({ pin, user_id }),
+    }),
   getMe: () => request<{ user: User }>('/auth/me'),
 
   // Users & Roles
@@ -64,7 +70,8 @@ export const api = {
   createUser: (userData: {
     username: string;
     email: string;
-    password: string;
+    password?: string;
+    pin?: string;
     full_name: string;
     role: Role;
   }) =>
@@ -72,7 +79,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(userData),
     }),
-  updateUser: (id: number, data: Partial<User> & { password?: string }) =>
+  updateUser: (id: number, data: Partial<User> & { password?: string; pin?: string }) =>
     request<{ message: string; user: User }>(`/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -174,3 +181,4 @@ export const api = {
   // Dashboard Stats
   getDashboardStats: () => request<DashboardStats>('/dashboard/stats'),
 };
+

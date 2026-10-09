@@ -1,5 +1,12 @@
 export type Role = 'ADMIN' | 'MANAGER' | 'SALES_CASHIER' | 'INVENTORY_CLERK';
 
+export interface StaffMember {
+  id: number;
+  username: string;
+  full_name: string;
+  role: Role;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -7,6 +14,7 @@ export interface User {
   full_name: string;
   role: Role;
   is_active: number;
+  has_pin?: number;
   created_at: string;
 }
 

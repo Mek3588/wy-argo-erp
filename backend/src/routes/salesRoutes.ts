@@ -226,3 +226,4 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
 });
 
 export default router;
+

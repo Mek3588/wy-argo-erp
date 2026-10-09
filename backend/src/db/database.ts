@@ -22,6 +22,7 @@ export function initializeDatabase() {
       username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      pin_hash TEXT,
       full_name TEXT NOT NULL,
       role TEXT CHECK(role IN ('ADMIN', 'MANAGER', 'SALES_CASHIER', 'INVENTORY_CLERK')) NOT NULL,
       is_active INTEGER DEFAULT 1,
@@ -136,6 +137,20 @@ export function initializeDatabase() {
     );
   `);
 
+  // Migration check: Ensure pin_hash column exists
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT;`);
+  } catch (e) {
+    // Column already exists
+  }
+
+  // Update existing users with default PINs if empty
+  const salt = bcrypt.genSaltSync(10);
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'admin' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('1111', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'manager' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('2222', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'cashier' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('3333', salt));
+  db.prepare("UPDATE users SET pin_hash = ? WHERE username = 'inventory' AND (pin_hash IS NULL OR pin_hash = '')").run(bcrypt.hashSync('4444', salt));
+
   // Seed default demo data if users are empty
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
   if (userCount === 0) {
@@ -152,16 +167,21 @@ function seedDemoData() {
   const cashierPass = bcrypt.hashSync('cashier123', salt);
   const inventoryPass = bcrypt.hashSync('inventory123', salt);
 
+  const adminPin = bcrypt.hashSync('1111', salt);
+  const managerPin = bcrypt.hashSync('2222', salt);
+  const cashierPin = bcrypt.hashSync('3333', salt);
+  const inventoryPin = bcrypt.hashSync('4444', salt);
+
   // 1. Insert Users
   const insertUser = db.prepare(`
-    INSERT INTO users (username, email, password_hash, full_name, role)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO users (username, email, password_hash, pin_hash, full_name, role)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
-  const adminId = insertUser.run('admin', 'admin@wyargo.com', adminPass, 'Abebe Bikila (Admin)', 'ADMIN').lastInsertRowid;
-  const managerId = insertUser.run('manager', 'manager@wyargo.com', managerPass, 'Sara Tadesse (Manager)', 'MANAGER').lastInsertRowid;
-  const cashierId = insertUser.run('cashier', 'cashier@wyargo.com', cashierPass, 'Dawit Haile (Cashier)', 'SALES_CASHIER').lastInsertRowid;
-  const inventoryId = insertUser.run('inventory', 'inventory@wyargo.com', inventoryPass, 'Marta Girma (Inventory Clerk)', 'INVENTORY_CLERK').lastInsertRowid;
+  const adminId = insertUser.run('admin', 'admin@wyargo.com', adminPass, adminPin, 'Abebe Bikila (Admin)', 'ADMIN').lastInsertRowid;
+  const managerId = insertUser.run('manager', 'manager@wyargo.com', managerPass, managerPin, 'Sara Tadesse (Manager)', 'MANAGER').lastInsertRowid;
+  const cashierId = insertUser.run('cashier', 'cashier@wyargo.com', cashierPass, cashierPin, 'Dawit Haile (Cashier)', 'SALES_CASHIER').lastInsertRowid;
+  const inventoryId = insertUser.run('inventory', 'inventory@wyargo.com', inventoryPass, inventoryPin, 'Marta Girma (Inventory Clerk)', 'INVENTORY_CLERK').lastInsertRowid;
 
   // 2. Insert Dairy Products
   const insertProduct = db.prepare(`
@@ -267,3 +287,4 @@ function seedDemoData() {
 
   console.log('✅ WY Argo Dairy ERP demo data successfully seeded!');
 }
+

@@ -581,3 +581,4 @@ export const SalesPage: React.FC = () => {
     </div>
   );
 };
+
