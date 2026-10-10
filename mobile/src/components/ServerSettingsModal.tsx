@@ -24,6 +24,7 @@ export const ServerSettingsModal: React.FC<Props> = ({ visible, onClose }) => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const presets = [
+    { label: 'Cloud Production (Secure HTTPS)', url: 'https://84.247.131.118.sslip.io/api' },
     { label: 'Host Machine LAN (Device/Wi-Fi)', url: 'http://10.5.2.7:5000/api' },
     { label: 'Localhost (Web / Local)', url: 'http://localhost:5000/api' },
     { label: 'Android Emulator (10.0.2.2)', url: 'http://10.0.2.2:5000/api' },

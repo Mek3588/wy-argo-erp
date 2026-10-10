@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.wyargo.dairy",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#047857",
         "foregroundImage": "./assets/android-icon-foreground.png",

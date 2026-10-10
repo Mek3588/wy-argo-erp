@@ -5,9 +5,9 @@ import { Product, Sale, CashFlowSummary, DashboardStats, Expense, StaffMember } 
 const STORAGE_KEY_SERVER_URL = '@wy_argo_server_url';
 const STORAGE_KEY_TOKEN = '@wy_argo_auth_token';
 
-// Automatically pick sensible initial default: live production server
+// Automatically pick sensible initial default: live production server with HTTPS
 const getInitialDefaultUrl = (): string => {
-  return 'http://84.247.131.118/api';
+  return 'https://84.247.131.118.sslip.io/api';
 };
 
 let currentServerUrl = getInitialDefaultUrl();
@@ -15,8 +15,12 @@ let currentAuthToken: string | null = null;
 
 export const initApiClient = async (): Promise<string> => {
   try {
-    const savedUrl = await AsyncStorage.getItem(STORAGE_KEY_SERVER_URL);
+    let savedUrl = await AsyncStorage.getItem(STORAGE_KEY_SERVER_URL);
     if (savedUrl) {
+      if (savedUrl.startsWith('http://84.247.131.118')) {
+        savedUrl = 'https://84.247.131.118.sslip.io/api';
+        await AsyncStorage.setItem(STORAGE_KEY_SERVER_URL, savedUrl);
+      }
       currentServerUrl = savedUrl;
     }
     const savedToken = await AsyncStorage.getItem(STORAGE_KEY_TOKEN);
