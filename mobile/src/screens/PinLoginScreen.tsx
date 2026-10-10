@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,42 +10,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { StaffMember } from '../types';
 import { ServerSettingsModal } from '../components/ServerSettingsModal';
 
 const PIN_LENGTH = 6;
 
-const getStaffDisplayName = (staff?: StaffMember | null): string => {
-  if (!staff) return 'Staff';
-  return staff.full_name || staff.name || staff.username || 'Staff';
-};
-
-const getStaffFirstName = (staff?: StaffMember | null): string => {
-  const name = getStaffDisplayName(staff);
-  return name.split(' ')[0] || 'Staff';
-};
-
 export const PinLoginScreen: React.FC = () => {
-  const { staffList, refreshStaffList, loginWithPin, isLoading, isConnected } = useAuth();
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const { loginWithPin, isConnected } = useAuth();
   const [pin, setPin] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
-
-  useEffect(() => {
-    refreshStaffList();
-  }, []);
-
-  // When staffList loads, preselect cashier or first staff member
-  useEffect(() => {
-    if (staffList.length > 0 && !selectedStaff) {
-      const defaultStaff =
-        staffList.find((s) => (s.role || '').toLowerCase().includes('cashier')) ||
-        staffList[0];
-      setSelectedStaff(defaultStaff);
-    }
-  }, [staffList]);
 
   // Handle number press
   const handleDigitPress = (digit: string) => {
@@ -73,29 +47,13 @@ export const PinLoginScreen: React.FC = () => {
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      await loginWithPin(completedPin, selectedStaff?.id);
+      await loginWithPin(completedPin);
     } catch (err: any) {
       setErrorMessage(err.message || 'Invalid 6-digit PIN. Please try again.');
       setPin('');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleQuickDemoFill = (staff: StaffMember, demoPin: string) => {
-    setSelectedStaff(staff);
-    setPin(demoPin);
-    setErrorMessage(null);
-    submitPin(demoPin);
-  };
-
-  const getRoleBadge = (role: string = '') => {
-    const r = role.toLowerCase();
-    if (r.includes('admin')) return { label: 'Admin', color: '#dc2626' };
-    if (r.includes('manager')) return { label: 'Manager', color: '#d97706' };
-    if (r.includes('cashier')) return { label: 'Cashier', color: '#2563eb' };
-    if (r.includes('inventory')) return { label: 'Inventory', color: '#7c3aed' };
-    return { label: role || 'Staff', color: '#4b5563' };
   };
 
   return (
@@ -122,60 +80,15 @@ export const PinLoginScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Staff Profile Selection */}
-        <View style={styles.staffSection}>
-          <Text style={styles.sectionHeading}>Select Staff Terminal Profile:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.staffScroll}
-          >
-            {staffList.map((staff) => {
-              const isSelected = selectedStaff?.id === staff.id;
-              const badge = getRoleBadge(staff.role);
-              const displayName = getStaffDisplayName(staff);
-              return (
-                <TouchableOpacity
-                  key={staff.id}
-                  style={[styles.staffCard, isSelected && styles.staffCardSelected]}
-                  onPress={() => {
-                    setSelectedStaff(staff);
-                    setPin('');
-                    setErrorMessage(null);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.avatarCircle,
-                      isSelected && styles.avatarCircleSelected,
-                    ]}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={18}
-                      color={isSelected ? '#ffffff' : '#047857'}
-                    />
-                  </View>
-                  <Text
-                    style={[styles.staffName, isSelected && styles.staffNameSelected]}
-                    numberOfLines={1}
-                  >
-                    {displayName}
-                  </Text>
-                  <Text style={[styles.staffRole, { color: badge.color }]}>
-                    {badge.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
         {/* PIN Prompt & Visual Indicator */}
         <View style={styles.pinDisplaySection}>
+          <View style={styles.lockIconCircle}>
+            <Ionicons name="lock-closed" size={28} color="#047857" />
+          </View>
+
+          <Text style={styles.mainTitle}>Staff Terminal Sign In</Text>
           <Text style={styles.pinPromptText}>
-            Enter 6-Digit PIN for {getStaffDisplayName(selectedStaff)}
+            Enter your assigned 6-digit staff PIN
           </Text>
 
           {/* 6 Dots */}
@@ -260,45 +173,6 @@ export const PinLoginScreen: React.FC = () => {
             </View>
           ))}
         </View>
-
-        {/* Demo Fast Pins Bar */}
-        <View style={styles.demoBar}>
-          <Text style={styles.demoTitle}>Quick Demo Logins (Tap to Test):</Text>
-          <View style={styles.demoButtonsRow}>
-            {staffList.slice(0, 4).map((s) => {
-              const roleKey = (s.role || '').toLowerCase();
-              const demoPins: Record<string, string> = {
-                admin: '111111',
-                manager: '222222',
-                cashier: '333333',
-                sales_cashier: '333333',
-                inventory: '444444',
-                inventory_clerk: '444444',
-              };
-              const pinVal =
-                demoPins[roleKey] ||
-                (roleKey.includes('admin')
-                  ? '111111'
-                  : roleKey.includes('manager')
-                  ? '222222'
-                  : roleKey.includes('cashier')
-                  ? '333333'
-                  : '444444');
-              const firstName = getStaffFirstName(s);
-              return (
-                <TouchableOpacity
-                  key={s.id}
-                  style={styles.demoChip}
-                  onPress={() => handleQuickDemoFill(s, pinVal)}
-                >
-                  <Text style={styles.demoChipText}>
-                    {firstName} ({pinVal})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
       </ScrollView>
 
       <ServerSettingsModal
@@ -323,9 +197,9 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   logoBadge: {
     flexDirection: 'row',
@@ -333,150 +207,115 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#065f46',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
   serverPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ffffff',
-    paddingVertical: 6,
     paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   serverDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   serverPillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     color: '#475569',
-  },
-  staffSection: {
-    marginBottom: 16,
-  },
-  sectionHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  staffScroll: {
-    gap: 10,
-    paddingVertical: 2,
-  },
-  staffCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    width: 105,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-  },
-  staffCardSelected: {
-    borderColor: '#047857',
-    backgroundColor: '#ecfdf5',
-  },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#d1fae5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  avatarCircleSelected: {
-    backgroundColor: '#047857',
-  },
-  staffName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1e293b',
-    textAlign: 'center',
-  },
-  staffNameSelected: {
-    color: '#065f46',
-    fontWeight: '700',
-  },
-  staffRole: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 2,
   },
   pinDisplaySection: {
     alignItems: 'center',
-    marginVertical: 12,
+    paddingVertical: 16,
+  },
+  lockIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  mainTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
   },
   pinPromptText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 14,
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
   },
   dotsRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
   },
   pinDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#94a3b8',
-    backgroundColor: 'transparent',
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
   },
   pinDotFilled: {
     backgroundColor: '#047857',
     borderColor: '#047857',
+    transform: [{ scale: 1.15 }],
   },
   pinDotError: {
-    borderColor: '#ef4444',
-    backgroundColor: '#fecaca',
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    paddingHorizontal: 12,
     borderRadius: 8,
-    marginTop: 4,
+    marginTop: 6,
   },
   errorText: {
-    fontSize: 13,
     color: '#dc2626',
+    fontSize: 12,
     fontWeight: '500',
   },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 6,
+    marginTop: 8,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#047857',
     fontWeight: '600',
   },
   keypad: {
-    gap: 12,
-    alignSelf: 'center',
     width: '100%',
     maxWidth: 320,
-    marginVertical: 8,
+    alignSelf: 'center',
+    gap: 12,
+    marginBottom: 10,
   },
   keypadRow: {
     flexDirection: 'row',
@@ -485,60 +324,31 @@ const styles = StyleSheet.create({
   },
   keyBtn: {
     flex: 1,
-    height: 60,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: '#ffffff',
-    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   actionKeyBtn: {
     backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
   numberKeyText: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0f172a',
   },
   actionKeyText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  demoBar: {
-    marginTop: 12,
-    backgroundColor: '#f1f5f9',
-    padding: 10,
-    borderRadius: 12,
-  },
-  demoTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  demoChip: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-  },
-  demoChipText: {
-    fontSize: 11,
     fontWeight: '600',
-    color: '#047857',
+    color: '#475569',
   },
 });

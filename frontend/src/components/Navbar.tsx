@@ -1,10 +1,10 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Milk, LogOut, Shield, User as UserIcon, RefreshCw } from 'lucide-react';
+import { Milk, LogOut } from 'lucide-react';
 import { Role } from '../types';
 
 export const Navbar: React.FC = () => {
-  const { user, logout, quickSwitchRole } = useAuth();
+  const { user, logout } = useAuth();
 
   const roleColors: Record<Role, string> = {
     ADMIN: 'bg-rose-100 text-rose-800 border-rose-300',
@@ -36,33 +36,11 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* User Info & Quick Demo Switcher */}
+        {/* User Info */}
         {user && (
           <div className="flex items-center gap-4">
-            {/* Quick Demo Role Switcher */}
-            <div className="hidden md:flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200 text-xs">
-              <span className="text-slate-500 font-medium px-2 flex items-center gap-1">
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                Quick Role:
-              </span>
-              {(['ADMIN', 'MANAGER', 'SALES_CASHIER', 'INVENTORY_CLERK'] as Role[]).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => quickSwitchRole(r)}
-                  className={`px-2 py-1 rounded font-medium transition-all ${
-                    user.role === r
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-200/60'
-                  }`}
-                  title={`Switch to ${roleLabels[r]} demo account`}
-                >
-                  {r === 'SALES_CASHIER' ? 'Cashier' : r === 'INVENTORY_CLERK' ? 'Clerk' : r}
-                </button>
-              ))}
-            </div>
-
             {/* Current User Pill */}
-            <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
+            <div className="flex items-center gap-3">
               <div className="text-right">
                 <p className="text-sm font-semibold text-slate-800 leading-tight">{user.full_name}</p>
                 <span

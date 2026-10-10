@@ -23,3 +23,4 @@ docker compose up -d --build
 echo "✅ WY Argo Dairy ERP is successfully deployed and running!"
 echo "🌐 Web Dashboard: http://localhost"
 echo "🥛 Backend API:    http://localhost:5000/api"
+

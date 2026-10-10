@@ -38,3 +38,4 @@ volumes:
 networks:
   wy_network:
     driver: bridge
+
