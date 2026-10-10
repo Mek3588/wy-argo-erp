@@ -13,7 +13,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 // Middleware
 app.use(cors());
@@ -40,7 +40,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🥛 WY Argo Dairy ERP Backend running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🥛 WY Argo Dairy ERP Backend running on http://0.0.0.0:${PORT}`);
 });
 

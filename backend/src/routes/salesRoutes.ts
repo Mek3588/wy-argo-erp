@@ -98,7 +98,7 @@ interface CreateSaleItem {
 // POST /api/sales - Create sale (Any role with sales permission)
 router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: AuthRequest, res: Response): void => {
   try {
-    const {
+    let {
       customer_name,
       customer_phone,
       sale_category = 'Retail / Walk-in',
@@ -110,7 +110,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       customer_name?: string;
       customer_phone?: string;
       sale_category?: string;
-      payment_method: 'CASH' | 'TELEBIRR' | 'BANK_TRANSFER' | 'CREDIT';
+      payment_method: string;
       discount?: number;
       notes?: string;
       items: CreateSaleItem[];
@@ -121,11 +121,19 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       return;
     }
 
-    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'];
-    if (!validMethods.includes(payment_method)) {
-      res.status(400).json({ error: 'Invalid payment method' });
-      return;
+    // Normalize payment method to uppercase and map common aliases
+    let normalizedMethod = String(payment_method).toUpperCase();
+    if (normalizedMethod === 'CBE' || normalizedMethod === 'BANK') {
+      normalizedMethod = 'BANK_TRANSFER';
+    } else if (normalizedMethod === 'OTHER') {
+      normalizedMethod = 'CASH';
     }
+
+    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'];
+    if (!validMethods.includes(normalizedMethod)) {
+      normalizedMethod = 'CASH';
+    }
+    payment_method = normalizedMethod as any;
 
     const executeSale = db.transaction(() => {
       let subtotal = 0;
@@ -280,7 +288,13 @@ router.put('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: R
     const executeEdit = db.transaction(() => {
       let newSubtotal = existing.subtotal;
       let newDiscount = discount !== undefined ? Number(discount) : existing.discount;
-      let newPaymentMethod = payment_method || existing.payment_method;
+      let rawMethod = String(payment_method || existing.payment_method || 'CASH').toUpperCase();
+      if (rawMethod === 'CBE' || rawMethod === 'BANK') {
+        rawMethod = 'BANK_TRANSFER';
+      } else if (rawMethod === 'OTHER') {
+        rawMethod = 'CASH';
+      }
+      let newPaymentMethod = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'].includes(rawMethod) ? rawMethod : 'CASH';
       let newCategory = sale_category || existing.sale_category;
       let newCustName = customer_name !== undefined ? customer_name : existing.customer_name;
       let newCustPhone = customer_phone !== undefined ? customer_phone : existing.customer_phone;
