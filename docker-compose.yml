@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wy_argo_backend
+    restart: always
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-wy_argo_super_secret_jwt_key_2026}
+    volumes:
+      - dairy_data:/app/data
+    ports:
+      - "5000:5000"
+    networks:
+      - wy_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wy_argo_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - wy_network
+
+volumes:
+  dairy_data:
+    driver: local
+
+networks:
+  wy_network:
+    driver: bridge
