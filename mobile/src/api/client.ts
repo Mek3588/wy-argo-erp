@@ -5,15 +5,9 @@ import { Product, Sale, CashFlowSummary, DashboardStats, Expense, StaffMember } 
 const STORAGE_KEY_SERVER_URL = '@wy_argo_server_url';
 const STORAGE_KEY_TOKEN = '@wy_argo_auth_token';
 
-// Automatically pick sensible initial default based on environment
+// Automatically pick sensible initial default: live production server
 const getInitialDefaultUrl = (): string => {
-  if (Platform.OS === 'web') {
-    return 'http://localhost:5000/api';
-  } else if (Platform.OS === 'android') {
-    // 10.5.2.7 is the host machine LAN IP; fallback 10.0.2.2 is Android emulator alias
-    return 'http://10.5.2.7:5000/api';
-  }
-  return 'http://10.5.2.7:5000/api';
+  return 'http://84.247.131.118/api';
 };
 
 let currentServerUrl = getInitialDefaultUrl();
