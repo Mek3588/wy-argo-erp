@@ -90,9 +90,12 @@ export interface Sale {
   payment_status?: string;
   paid_amount?: number;
   due_amount?: number;
-  due_date?: string;
   sale_category: string;
   notes?: string;
+  is_finance_verified?: number;
+  finance_verified_at?: string;
+  finance_verified_by_name?: string;
+  items_summary?: string;
   created_at: string;
   items?: SaleItem[];
 }

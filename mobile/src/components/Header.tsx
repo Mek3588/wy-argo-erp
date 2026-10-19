@@ -19,6 +19,7 @@ export const Header: React.FC = () => {
     const r = role.toLowerCase();
     if (r.includes('admin')) return { bg: '#fee2e2', text: '#991b1b', label: 'Admin' };
     if (r.includes('manager')) return { bg: '#fef3c7', text: '#92400e', label: 'Manager' };
+    if (r.includes('finance')) return { bg: '#fef3c7', text: '#b45309', label: 'Finance' };
     if (r.includes('cashier')) return { bg: '#dbeafe', text: '#1e40af', label: 'Cashier' };
     if (r.includes('inventory')) return { bg: '#ede9fe', text: '#5b21b6', label: 'Inventory' };
     return { bg: '#e5e7eb', text: '#374151', label: 'Staff' };

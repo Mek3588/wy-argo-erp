@@ -209,6 +209,13 @@ export const api = {
     });
   },
 
+  toggleFinanceVerify: async (saleId: number) => {
+    return request<{ is_finance_verified: number; finance_verified_at: string; finance_verified_by_name: string }>(
+      `/sales/${saleId}/finance-verify`,
+      { method: 'PATCH' }
+    );
+  },
+
   // Expenses
   getExpenses: async (): Promise<Expense[]> => {
     const res = await request<{ expenses: Expense[] }>('/expenses');

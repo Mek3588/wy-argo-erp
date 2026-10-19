@@ -48,6 +48,44 @@ export const SalesHistoryScreen: React.FC = () => {
 
   const roleStr = (user?.role || '').toLowerCase();
   const canEdit = roleStr.includes('manager') || roleStr.includes('admin');
+  const canVerifyFinance = roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('finance');
+  const [isVerifyingFinance, setIsVerifyingFinance] = useState<boolean>(false);
+
+  const handleToggleFinanceVerify = async () => {
+    if (!selectedSale) return;
+    try {
+      setIsVerifyingFinance(true);
+      const res = await api.toggleFinanceVerify(selectedSale.id);
+      setSelectedSale({
+        ...selectedSale,
+        is_finance_verified: res.is_finance_verified,
+        finance_verified_at: res.finance_verified_at,
+        finance_verified_by_name: res.finance_verified_by_name,
+      });
+      setSales((prev) =>
+        prev.map((s) =>
+          s.id === selectedSale.id
+            ? {
+                ...s,
+                is_finance_verified: res.is_finance_verified,
+                finance_verified_at: res.finance_verified_at,
+                finance_verified_by_name: res.finance_verified_by_name,
+              }
+            : s
+        )
+      );
+      Alert.alert(
+        res.is_finance_verified ? 'Payment Verified' : 'Verification Revoked',
+        res.is_finance_verified
+          ? 'Payment has been successfully verified by Finance.'
+          : 'Payment verification has been revoked.'
+      );
+    } catch (err: any) {
+      Alert.alert('Verification Error', err.message || 'Failed to update verification');
+    } finally {
+      setIsVerifyingFinance(false);
+    }
+  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -250,6 +288,12 @@ export const SalesHistoryScreen: React.FC = () => {
                 </View>
               </View>
 
+              {item.items_summary ? (
+                <Text style={styles.cardItemsSummary} numberOfLines={1}>
+                  🥛 {item.items_summary}
+                </Text>
+              ) : null}
+
               <View style={styles.cardBottom}>
                 <View style={styles.categoryBadge}>
                   <Text style={styles.categoryBadgeText}>👤 {item.cashier_name || 'Staff'}</Text>
@@ -260,6 +304,17 @@ export const SalesHistoryScreen: React.FC = () => {
                   </Text>
                 ) : (
                   <Text style={styles.customerWalkIn}>Walk-in</Text>
+                )}
+                {item.is_finance_verified ? (
+                  <View style={styles.financeVerifiedBadge}>
+                    <Ionicons name="checkmark-circle" size={11} color="#047857" />
+                    <Text style={styles.financeVerifiedText}>Verified</Text>
+                  </View>
+                ) : (
+                  <View style={styles.financePendingBadge}>
+                    <Ionicons name="time-outline" size={11} color="#b45309" />
+                    <Text style={styles.financePendingText}>Pending</Text>
+                  </View>
                 )}
                 {canEdit && (
                   <View style={styles.editHint}>
@@ -472,6 +527,69 @@ export const SalesHistoryScreen: React.FC = () => {
                     <Text style={styles.grandTotalValue}>
                       {Number(selectedSale.total_amount).toLocaleString()} ETB
                     </Text>
+                  </View>
+
+                  {/* Finance Authorization Card */}
+                  <View
+                    style={[
+                      styles.financeCard,
+                      selectedSale.is_finance_verified
+                        ? styles.financeCardVerified
+                        : styles.financeCardPending,
+                    ]}
+                  >
+                    <View style={styles.financeCardHeader}>
+                      <Ionicons
+                        name={selectedSale.is_finance_verified ? 'shield-checkmark' : 'time-outline'}
+                        size={20}
+                        color={selectedSale.is_finance_verified ? '#047857' : '#b45309'}
+                      />
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text
+                          style={[
+                            styles.financeCardTitle,
+                            { color: selectedSale.is_finance_verified ? '#047857' : '#b45309' },
+                          ]}
+                        >
+                          {selectedSale.is_finance_verified
+                            ? 'Finance Verified'
+                            : 'Pending Finance Authorization'}
+                        </Text>
+                        <Text style={styles.financeCardSub}>
+                          {selectedSale.is_finance_verified
+                            ? `Authorized by ${selectedSale.finance_verified_by_name || 'Finance'}`
+                            : 'Finance has not yet authorized payment receipt.'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {canVerifyFinance && (
+                      <TouchableOpacity
+                        style={[
+                          styles.financeActionBtn,
+                          selectedSale.is_finance_verified
+                            ? styles.financeRevokeBtn
+                            : styles.financeVerifyBtn,
+                        ]}
+                        onPress={handleToggleFinanceVerify}
+                        disabled={isVerifyingFinance}
+                      >
+                        {isVerifyingFinance ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Text
+                            style={[
+                              styles.financeActionBtnText,
+                              selectedSale.is_finance_verified ? { color: '#991b1b' } : undefined,
+                            ]}
+                          >
+                            {selectedSale.is_finance_verified
+                              ? 'Revoke Verification'
+                              : 'Verify Cash Received'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Manager Edit Button */}
@@ -965,6 +1083,93 @@ const styles = StyleSheet.create({
   },
   saveEditText: {
     fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  cardItemsSummary: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '500',
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  financeVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    gap: 3,
+  },
+  financeVerifiedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  financePendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    gap: 3,
+  },
+  financePendingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#b45309',
+  },
+  financeCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 14,
+  },
+  financeCardVerified: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  financeCardPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  financeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  financeCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  financeCardSub: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  financeActionBtn: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  financeVerifyBtn: {
+    backgroundColor: '#047857',
+  },
+  financeRevokeBtn: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  financeActionBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#ffffff',
   },
