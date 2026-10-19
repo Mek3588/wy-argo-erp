@@ -79,7 +79,7 @@ export function initializeDatabase() {
       customer_phone TEXT,
       sale_category TEXT DEFAULT 'Retail / Walk-in',
       payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT')) NOT NULL,
-      payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING')) DEFAULT 'PAID',
+      payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING', 'PARTIALLY_PAID')) DEFAULT 'PAID',
       subtotal REAL NOT NULL,
       discount REAL DEFAULT 0,
       total_amount REAL NOT NULL,
@@ -195,6 +195,53 @@ export function initializeDatabase() {
   try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_at DATETIME;`); } catch (e) {}
   try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_user_id INTEGER REFERENCES users(id);`); } catch (e) {}
   try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_name TEXT;`); } catch (e) {}
+
+  // Migrate sales table to allow 'PARTIALLY_PAID' in payment_status CHECK constraint
+  try {
+    const salesTableSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sales'").get() as { sql: string } | undefined)?.sql || '';
+    if (salesTableSql && !salesTableSql.includes('PARTIALLY_PAID')) {
+      console.log('🔄 Migrating sales table schema to support PARTIALLY_PAID status...');
+      db.pragma('foreign_keys = OFF');
+      const cols = (db.prepare('PRAGMA table_info(sales)').all() as { name: string }[]).map((c) => c.name);
+      const colList = cols.join(', ');
+
+      db.exec(`
+        CREATE TABLE sales_mig_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sale_code TEXT UNIQUE NOT NULL,
+          customer_id INTEGER REFERENCES customers(id),
+          customer_name TEXT DEFAULT 'Walk-in Customer',
+          customer_phone TEXT,
+          sale_category TEXT DEFAULT 'Retail / Walk-in',
+          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT')) NOT NULL,
+          payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING', 'PARTIALLY_PAID')) DEFAULT 'PAID',
+          subtotal REAL NOT NULL,
+          discount REAL DEFAULT 0,
+          total_amount REAL NOT NULL,
+          paid_amount REAL DEFAULT 0,
+          due_amount REAL DEFAULT 0,
+          due_date DATE,
+          recorded_by_user_id INTEGER REFERENCES users(id),
+          notes TEXT,
+          is_finance_verified INTEGER DEFAULT 0,
+          finance_verified_at DATETIME,
+          finance_verified_by_user_id INTEGER REFERENCES users(id),
+          finance_verified_by_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO sales_mig_tmp (${colList})
+        SELECT ${colList} FROM sales;
+
+        DROP TABLE sales;
+        ALTER TABLE sales_mig_tmp RENAME TO sales;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Sales table migrated successfully to allow PARTIALLY_PAID!');
+    }
+  } catch (err) {
+    console.error('Migration error for sales table PARTIALLY_PAID:', err);
+  }
 
   // Backfill existing sales paid_amount and due_amount if not populated
   try {

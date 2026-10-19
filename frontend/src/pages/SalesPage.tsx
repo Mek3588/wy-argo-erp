@@ -966,22 +966,11 @@ export const SalesPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                    <div>
-                      <span className="text-slate-500 block">Agreed Due Date:</span>
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className="w-full px-2 py-1 border border-slate-300 rounded-lg bg-white text-xs mt-0.5"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block">Remaining Loan:</span>
-                      <span className="font-bold text-rose-700 text-xs block mt-1.5">
-                        {Math.max(0, total - (Number(upfrontPaidAmount) || 0)).toLocaleString()} ETB
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between text-[11px] pt-1">
+                    <span className="text-slate-600 font-medium">Remaining Credit / Loan Balance:</span>
+                    <span className="font-bold text-rose-700 text-xs font-mono">
+                      {Math.max(0, total - (Number(upfrontPaidAmount) || 0)).toLocaleString()} ETB
+                    </span>
                   </div>
                 </div>
               )}
