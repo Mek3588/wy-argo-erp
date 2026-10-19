@@ -23,11 +23,22 @@ import {
   AlertCircle,
   DollarSign,
   Clock,
+  ShieldCheck,
+  CheckSquare,
 } from 'lucide-react';
 
 interface CartItem {
   product: Product;
   quantity: number;
+  unit_price: number;
+}
+
+interface EditItemRow {
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+  product_name?: string;
+  product_unit?: string;
 }
 
 const SALE_CATEGORIES = [
@@ -42,6 +53,7 @@ const SALE_CATEGORIES = [
 export const SalesPage: React.FC = () => {
   const { user, hasRole } = useAuth();
   const canEditSales = hasRole('ADMIN', 'MANAGER');
+  const canVerifyFinance = hasRole('ADMIN', 'MANAGER', 'FINANCE');
 
   const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
   const [products, setProducts] = useState<Product[]>([]);
@@ -61,7 +73,6 @@ export const SalesPage: React.FC = () => {
   const [upfrontPaidAmount, setUpfrontPaidAmount] = useState('');
   const [upfrontMethod, setUpfrontMethod] = useState<PaymentMethod>('CASH');
   const [dueDate, setDueDate] = useState('');
-  const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState('');
   const [searchProduct, setSearchProduct] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +84,6 @@ export const SalesPage: React.FC = () => {
     name: '',
     phone: '',
     customer_type: 'RETAIL' as CustomerType,
-    credit_limit: '',
   });
 
   // Repayment Modal State (Direct Collection from History)
@@ -89,6 +99,8 @@ export const SalesPage: React.FC = () => {
   const [filterDate, setFilterDate] = useState<string>(todayStr);
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterFinanceStatus, setFilterFinanceStatus] = useState<string>('ALL');
+  const [bulkVerifying, setBulkVerifying] = useState(false);
 
   // History detail modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -101,9 +113,9 @@ export const SalesPage: React.FC = () => {
     customer_phone: '',
     sale_category: 'Retail / Walk-in',
     payment_method: 'CASH' as PaymentMethod,
-    discount: 0,
     notes: '',
   });
+  const [editItems, setEditItems] = useState<EditItemRow[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const loadData = async () => {
@@ -116,6 +128,7 @@ export const SalesPage: React.FC = () => {
           date: filterDate || undefined,
           category: filterCategory !== 'ALL' ? filterCategory : undefined,
           status: filterStatus !== 'ALL' ? filterStatus : undefined,
+          finance_status: filterFinanceStatus !== 'ALL' ? filterFinanceStatus : undefined,
         }),
         api.getCustomers(),
       ]);
@@ -131,7 +144,7 @@ export const SalesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [filterDate, filterCategory, filterStatus]);
+  }, [filterDate, filterCategory, filterStatus, filterFinanceStatus]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,7 +170,7 @@ export const SalesPage: React.FC = () => {
         alert(`Product "${product.name}" is currently out of stock!`);
         return;
       }
-      setCart([...cart, { product, quantity: 1 }]);
+      setCart([...cart, { product, quantity: 1, unit_price: product.unit_price }]);
     }
   };
 
@@ -166,7 +179,7 @@ export const SalesPage: React.FC = () => {
       prev
         .map((item) => {
           if (item.product.id === productId) {
-            const newQty = item.quantity + delta;
+            const newQty = Math.round((item.quantity + delta) * 100) / 100;
             const available = item.product.current_stock ?? 0;
             if (newQty > available) {
               alert(`Maximum available stock is ${available} ${item.product.unit}`);
@@ -180,12 +193,38 @@ export const SalesPage: React.FC = () => {
     );
   };
 
+  const setItemExactQuantity = (productId: number, qty: number) => {
+    if (isNaN(qty) || qty <= 0) return;
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.product.id === productId) {
+          const available = item.product.current_stock ?? 0;
+          if (qty > available) {
+            alert(`Maximum available stock is ${available} ${item.product.unit}`);
+            return { ...item, quantity: available };
+          }
+          return { ...item, quantity: qty };
+        }
+        return item;
+      })
+    );
+  };
+
+  const setItemExactPrice = (productId: number, price: number) => {
+    if (isNaN(price) || price < 0) return;
+    setCart((prev) =>
+      prev.map((item) =>
+        item.product.id === productId ? { ...item, unit_price: price } : item
+      )
+    );
+  };
+
   const removeFromCart = (productId: number) => {
     setCart(cart.filter((item) => item.product.id !== productId));
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.product.unit_price * item.quantity, 0);
-  const total = Math.max(0, subtotal - discount);
+  const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  const total = subtotal; // Direct price, no discount needed
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,12 +253,12 @@ export const SalesPage: React.FC = () => {
         paid_amount: paidAmt,
         due_amount: dueAmt,
         due_date: isCredit && dueDate ? dueDate : undefined,
-        discount: Number(discount),
+        discount: 0,
         notes,
         items: cart.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
-          unit_price: i.product.unit_price,
+          unit_price: i.unit_price,
         })),
       };
 
@@ -235,7 +274,6 @@ export const SalesPage: React.FC = () => {
       setIsPartialCredit(false);
       setUpfrontPaidAmount('');
       setDueDate('');
-      setDiscount(0);
       setNotes('');
       loadData();
     } catch (err: any) {
@@ -253,19 +291,20 @@ export const SalesPage: React.FC = () => {
         name: quickCustomer.name.trim(),
         phone: quickCustomer.phone.trim() || undefined,
         customer_type: quickCustomer.customer_type,
-        credit_limit: Number(quickCustomer.credit_limit) || 0,
+        credit_limit: 0,
       });
       setIsQuickCustomerModalOpen(false);
       setQuickCustomer({
         name: '',
         phone: '',
         customer_type: 'RETAIL',
-        credit_limit: '',
       });
       await loadData();
       if (res.customer) {
         setCustomerMode('registered');
         setSelectedCustomerId(res.customer.id);
+        setCustomerName(res.customer.name);
+        setCustomerPhone(res.customer.phone || '');
       }
     } catch (err: any) {
       alert(`Failed to create customer: ${err.message}`);
@@ -309,23 +348,88 @@ export const SalesPage: React.FC = () => {
     }
   };
 
-  // Open Manager Edit Modal
-  const openEditModal = (sale: Sale) => {
+  // Open Manager Edit Modal - Fetch full items for full line-item correction
+  const openEditModal = async (sale: Sale) => {
     setEditingSale(sale);
     setEditForm({
       customer_name: sale.customer_name,
       customer_phone: sale.customer_phone || '',
       sale_category: sale.sale_category || 'Retail / Walk-in',
       payment_method: sale.payment_method,
-      discount: sale.discount || 0,
       notes: sale.notes || '',
     });
+    try {
+      const res = await api.getSaleDetails(sale.id);
+      setEditItems(
+        (res.items || []).map((i: any) => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+          product_name: i.product_name,
+          product_unit: i.product_unit,
+        }))
+      );
+    } catch (err) {
+      setEditItems([]);
+    }
   };
+
+  const updateEditItem = (index: number, field: keyof EditItemRow, value: any) => {
+    setEditItems((prev) => {
+      const copy = [...prev];
+      if (field === 'product_id') {
+        const prodId = Number(value);
+        const prod = products.find((p) => p.id === prodId);
+        copy[index] = {
+          ...copy[index],
+          product_id: prodId,
+          product_name: prod?.name || '',
+          product_unit: prod?.unit || 'pcs',
+          unit_price: prod ? prod.unit_price : copy[index].unit_price,
+        };
+      } else {
+        copy[index] = { ...copy[index], [field]: value };
+      }
+      return copy;
+    });
+  };
+
+  const removeEditItem = (index: number) => {
+    if (editItems.length <= 1) {
+      alert('Sale must contain at least one product.');
+      return;
+    }
+    setEditItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addEditItem = () => {
+    if (products.length === 0) return;
+    const firstProd = products[0];
+    setEditItems((prev) => [
+      ...prev,
+      {
+        product_id: firstProd.id,
+        quantity: 1,
+        unit_price: firstProd.unit_price,
+        product_name: firstProd.name,
+        product_unit: firstProd.unit,
+      },
+    ]);
+  };
+
+  const editTotal = editItems.reduce(
+    (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0),
+    0
+  );
 
   // Save Manager Edit
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSale) return;
+    if (editItems.length === 0) {
+      alert('Sale must have at least one product item!');
+      return;
+    }
 
     try {
       setSavingEdit(true);
@@ -334,8 +438,13 @@ export const SalesPage: React.FC = () => {
         customer_phone: editForm.customer_phone,
         sale_category: editForm.sale_category,
         payment_method: editForm.payment_method,
-        discount: Number(editForm.discount),
+        discount: 0,
         notes: editForm.notes,
+        items: editItems.map((i) => ({
+          product_id: i.product_id,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+        })),
       });
 
       setEditingSale(null);
@@ -348,7 +457,50 @@ export const SalesPage: React.FC = () => {
     }
   };
 
-  // Direct Excel (.xlsx) Export
+  // Finance Verification Toggle
+  const handleToggleFinanceVerify = async (saleId: number) => {
+    try {
+      const res = await api.toggleFinanceVerify(saleId);
+      setSales((prev) =>
+        prev.map((s) =>
+          s.id === saleId
+            ? {
+                ...s,
+                is_finance_verified: res.is_finance_verified,
+                finance_verified_at: res.finance_verified_at,
+                finance_verified_by_name: res.finance_verified_by_name,
+              }
+            : s
+        )
+      );
+    } catch (err: any) {
+      alert(`Finance verification failed: ${err.message}`);
+    }
+  };
+
+  // Bulk Finance Verification
+  const handleBulkFinanceVerify = async () => {
+    const unverified = sales.filter((s) => !s.is_finance_verified);
+    if (unverified.length === 0) {
+      alert('All sales currently shown are already verified!');
+      return;
+    }
+    if (!confirm(`Acknowledge and verify cash/payment received for all ${unverified.length} pending sales?`)) {
+      return;
+    }
+    try {
+      setBulkVerifying(true);
+      await api.bulkFinanceVerify(unverified.map((s) => s.id));
+      alert(`Successfully verified ${unverified.length} sales!`);
+      loadData();
+    } catch (err: any) {
+      alert(`Bulk verification failed: ${err.message}`);
+    } finally {
+      setBulkVerifying(false);
+    }
+  };
+
+  // Direct Excel (.xlsx) Export with Products & Quantities
   const exportDailySalesToExcel = () => {
     if (sales.length === 0) {
       alert('No sales records to export for this selection.');
@@ -359,44 +511,47 @@ export const SalesPage: React.FC = () => {
       '#': index + 1,
       'Receipt Code': s.sale_code,
       'Date & Time': s.created_at,
-      'Sale Category': s.sale_category || 'Retail / Walk-in',
+      'Products & Quantities': s.items_summary || '-',
       'Customer Name': s.customer_name,
       'Customer Phone': s.customer_phone || '-',
+      'Sales Category': s.sale_category || 'Retail / Walk-in',
       'Cashier': s.cashier_name || 'System',
       'Payment Method': s.payment_method,
       'Payment Status': s.payment_status,
-      'Subtotal (ETB)': s.subtotal,
-      'Discount (ETB)': s.discount,
       'Net Amount (ETB)': s.total_amount,
+      'Balance Due (ETB)': s.due_amount || 0,
+      'Finance Verified': s.is_finance_verified
+        ? `Verified (${s.finance_verified_by_name || 'Finance'})`
+        : 'Pending Review',
       'Notes': s.notes || '',
     }));
 
     // Add totals row
     const totalAmount = sales.reduce((acc, s) => acc + s.total_amount, 0);
-    const totalDiscount = sales.reduce((acc, s) => acc + s.discount, 0);
-    const totalSubtotal = sales.reduce((acc, s) => acc + s.subtotal, 0);
+    const totalDue = sales.reduce((acc, s) => acc + (s.due_amount || 0), 0);
 
     exportRows.push({
       '#': '' as any,
       'Receipt Code': 'TOTALS',
       'Date & Time': '',
-      'Sale Category': '',
+      'Products & Quantities': `${sales.length} Total Sales`,
       'Customer Name': '',
       'Customer Phone': '',
+      'Sales Category': '',
       'Cashier': '',
       'Payment Method': '',
       'Payment Status': '',
-      'Subtotal (ETB)': totalSubtotal,
-      'Discount (ETB)': totalDiscount,
       'Net Amount (ETB)': totalAmount,
-      'Notes': `${sales.length} Total Sales`,
+      'Balance Due (ETB)': totalDue,
+      'Finance Verified': '',
+      'Notes': '',
     });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Daily Sales');
 
-    const fileName = `WY_Argo_Dairy_Sales_${filterDate || 'Report'}.xlsx`;
+    const fileName = `Bani_Milk_Sales_${filterDate || 'Report'}.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -547,36 +702,55 @@ export const SalesPage: React.FC = () => {
                 </div>
               ) : (
                 cart.map((item) => (
-                  <div key={item.product.id} className="py-2.5 flex items-center justify-between text-xs">
-                    <div className="w-1/2">
+                  <div key={item.product.id} className="py-2.5 flex items-center justify-between text-xs gap-2">
+                    <div className="flex-1 min-w-0">
                       <div className="font-semibold text-slate-800 truncate">{item.product.name}</div>
-                      <div className="text-slate-400">
-                        {item.product.unit_price} ETB × {item.quantity} {item.product.unit}
+                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500">
+                        <span>Price:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={item.unit_price}
+                          onChange={(e) => setItemExactPrice(item.product.id, parseFloat(e.target.value) || 0)}
+                          className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-semibold text-slate-900 bg-white text-right focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span>ETB/{item.product.unit}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <button
+                        type="button"
                         onClick={() => updateQuantity(item.product.id, -1)}
                         className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="w-6 text-center font-bold text-slate-900">{item.quantity}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        value={item.quantity}
+                        onChange={(e) => setItemExactQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                        className="w-14 px-1 py-0.5 text-center font-bold text-slate-900 border border-slate-300 rounded bg-white focus:ring-1 focus:ring-blue-500"
+                      />
                       <button
+                        type="button"
                         onClick={() => updateQuantity(item.product.id, 1)}
                         className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => removeFromCart(item.product.id)}
-                        className="p-1 ml-1 text-slate-300 hover:text-rose-600"
+                        className="p-1 ml-0.5 text-slate-300 hover:text-rose-600"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="font-bold text-slate-900 w-16 text-right">
-                      {(item.product.unit_price * item.quantity).toLocaleString()} ETB
+                    <div className="font-bold text-slate-900 w-20 text-right">
+                      {(item.unit_price * item.quantity).toLocaleString()} ETB
                     </div>
                   </div>
                 ))
@@ -812,33 +986,11 @@ export const SalesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Discount */}
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">Discount (ETB):</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={discount}
-                  onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="w-24 px-2 py-1 text-right border border-slate-300 rounded-lg font-mono focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
               {/* Totals Summary */}
               <div className="bg-slate-50 p-3 rounded-xl space-y-1">
-                <div className="flex justify-between text-slate-500">
-                  <span>Subtotal:</span>
-                  <span>{subtotal.toLocaleString()} ETB</span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                    <span>Discount:</span>
-                    <span>-{discount.toLocaleString()} ETB</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold text-slate-900 pt-1 border-t border-slate-200">
-                  <span>Total Due:</span>
-                  <span className="text-blue-600">{total.toLocaleString()} ETB</span>
+                <div className="flex justify-between text-sm font-bold text-slate-900">
+                  <span>Total Amount:</span>
+                  <span className="text-blue-600 text-base">{total.toLocaleString()} ETB</span>
                 </div>
                 {paymentMethod === 'CREDIT' && (
                   <div className="flex justify-between text-xs font-bold text-rose-600 pt-1 border-t border-dashed border-rose-200">
@@ -937,11 +1089,35 @@ export const SalesPage: React.FC = () => {
                   <option value="CREDIT">On Credit / Pending</option>
                 </select>
 
+                {/* Finance Status Dropdown */}
+                <select
+                  value={filterFinanceStatus}
+                  onChange={(e) => setFilterFinanceStatus(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
+                >
+                  <option value="ALL">All Finance Status</option>
+                  <option value="VERIFIED">Verified by Finance</option>
+                  <option value="PENDING">Pending Review</option>
+                </select>
+
+                {/* Bulk Finance Verify Button */}
+                {canVerifyFinance && (
+                  <button
+                    onClick={handleBulkFinanceVerify}
+                    disabled={bulkVerifying}
+                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50"
+                    title="Acknowledge and verify payment received for all pending sales"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    {bulkVerifying ? 'Verifying...' : 'Verify All Pending'}
+                  </button>
+                )}
+
                 {/* Direct Excel Download Button */}
                 <button
                   onClick={exportDailySalesToExcel}
                   className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-all"
-                  title="Download directly as Microsoft Excel (.xlsx) file"
+                  title="Download directly as Microsoft Excel (.xlsx) file with Products & Quantities"
                 >
                   <Download className="w-4 h-4" />
                   Export to Excel (.xlsx)
@@ -979,11 +1155,13 @@ export const SalesPage: React.FC = () => {
                     <th className="py-3 px-4">Receipt #</th>
                     <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Products & Qty</th>
                     <th className="py-3 px-4">Sales Category</th>
                     <th className="py-3 px-4">Payment</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right">Total</th>
                     <th className="py-3 px-4 text-right">Balance Due</th>
+                    <th className="py-3 px-4 text-center">Finance Verified</th>
                     <th className="py-3 px-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -1010,6 +1188,11 @@ export const SalesPage: React.FC = () => {
                           {s.customer_phone && (
                             <div className="text-xs text-slate-400">{s.customer_phone}</div>
                           )}
+                        </td>
+                        <td className="py-3 px-4 max-w-[200px]">
+                          <div className="truncate text-xs font-medium text-slate-800" title={s.items_summary || ''}>
+                            {s.items_summary || `${s.item_count || 1} items`}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
@@ -1049,6 +1232,34 @@ export const SalesPage: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
+                          {s.is_finance_verified ? (
+                            <button
+                              type="button"
+                              onClick={() => canVerifyFinance && handleToggleFinanceVerify(s.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                              title={`Verified by ${s.finance_verified_by_name || 'Finance'}${s.finance_verified_at ? ` on ${s.finance_verified_at.split('T')[0]}` : ''}. Click to toggle.`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Verified
+                            </button>
+                          ) : canVerifyFinance ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFinanceVerify(s.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-colors shadow-xs"
+                              title="Finance verification: Click to authorize and verify that cash / payment was received"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                              Verify Cash
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={() => viewSaleDetails(s)}
@@ -1075,7 +1286,7 @@ export const SalesPage: React.FC = () => {
                               <button
                                 onClick={() => openEditModal(s)}
                                 className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                title="Manager Edit: Correct mistake on already sold item"
+                                title="Manager Edit: Correct products, quantity, or payment on this sale"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
@@ -1102,7 +1313,7 @@ export const SalesPage: React.FC = () => {
           <div className="space-y-4 text-xs">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between">
               <div>
-                <p className="font-bold text-slate-900 text-sm">WY Argo Dairy ERP</p>
+                <p className="font-bold text-slate-900 text-sm">Bani Milk ERP</p>
                 <p className="text-slate-500">Category: {selectedSale.sale_category || 'Retail / Walk-in'}</p>
                 <p className="text-slate-500">Customer: {selectedSale.customer_name}</p>
                 <p className="text-slate-500">Cashier: {selectedSale.cashier_name}</p>
@@ -1141,12 +1352,8 @@ export const SalesPage: React.FC = () => {
             </table>
 
             <div className="pt-3 border-t border-slate-200 space-y-1 text-right">
-              <div className="text-slate-500">Subtotal: {selectedSale.subtotal.toLocaleString()} ETB</div>
-              {selectedSale.discount > 0 && (
-                <div className="text-rose-600">Discount: -{selectedSale.discount.toLocaleString()} ETB</div>
-              )}
               <div className="text-base font-bold text-slate-900">
-                Net Total: {selectedSale.total_amount.toLocaleString()} ETB
+                Total: {selectedSale.total_amount.toLocaleString()} ETB
               </div>
             </div>
           </div>
@@ -1161,7 +1368,7 @@ export const SalesPage: React.FC = () => {
       >
         <form onSubmit={handleSaveEdit} className="space-y-4 text-sm">
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
-            <b>Manager Privilege:</b> Correct customer details, sales category, payment channel, or discount for receipt #{editingSale?.sale_code}. This will also automatically adjust the Cash Flow ledger.
+            <b>Manager Privilege:</b> Correct products sold, decimal quantities, prices, customer details, or payment channel for receipt #{editingSale?.sale_code}. Inventory batches, customer credit balance, and cash flow ledger will automatically re-synchronize.
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1216,22 +1423,112 @@ export const SalesPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Discount Amount (ETB)</label>
-            <input
-              type="number"
-              min="0"
-              value={editForm.discount}
-              onChange={(e) => setEditForm({ ...editForm, discount: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
+          {/* Products & Quantities Line Items Editor */}
+          <div className="space-y-2 pt-2 border-t border-slate-200">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-800">
+                Products Sold & Quantities
+              </label>
+              <button
+                type="button"
+                onClick={addEditItem}
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Product
+              </button>
+            </div>
+
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                  <tr>
+                    <th className="py-2 px-2.5">Product</th>
+                    <th className="py-2 px-2.5 w-24">Qty</th>
+                    <th className="py-2 px-2.5 w-28">Unit Price</th>
+                    <th className="py-2 px-2.5 text-right w-24">Subtotal</th>
+                    <th className="py-2 px-2 text-center w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {editItems.map((item, idx) => {
+                    const lineTotal = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="p-2">
+                          <select
+                            value={item.product_id}
+                            onChange={(e) => updateEditItem(idx, 'product_id', e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                          >
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.unit})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.01"
+                            value={item.quantity}
+                            onChange={(e) => updateEditItem(idx, 'quantity', e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-mono text-center focus:ring-1 focus:ring-blue-500"
+                            placeholder="Qty"
+                            required
+                          />
+                        </td>
+                        <td className="p-2">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={item.unit_price}
+                              onChange={(e) => updateEditItem(idx, 'unit_price', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-mono text-right focus:ring-1 focus:ring-blue-500"
+                              placeholder="Price"
+                              required
+                            />
+                            <span className="text-[10px] text-slate-400">ETB</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-right font-mono font-semibold text-slate-800">
+                          {lineTotal.toLocaleString()}
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeEditItem(idx)}
+                            disabled={editItems.length <= 1}
+                            className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 rounded"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+              <span className="text-xs text-slate-500">Recalculated Net Total:</span>
+              <span className="text-sm font-bold text-slate-900 font-mono">
+                {editTotal.toLocaleString()} ETB
+              </span>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Reason / Mistake Notes</label>
             <textarea
               rows={2}
-              placeholder="e.g. Cashier selected wrong payment channel / adjusted customer discount"
+              placeholder="e.g. Cashier selected wrong payment channel or product amount"
               value={editForm.notes}
               onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -1330,19 +1627,6 @@ export const SalesPage: React.FC = () => {
                 <option value="SUPERMARKET">Supermarket / Mart</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Credit Limit (ETB)</label>
-            <input
-              type="number"
-              min="0"
-              placeholder="Maximum allowed loan (e.g. 10000)"
-              value={quickCustomer.credit_limit}
-              onChange={(e) => setQuickCustomer({ ...quickCustomer, credit_limit: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">Leave blank or 0 for unlimited / custom approval.</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

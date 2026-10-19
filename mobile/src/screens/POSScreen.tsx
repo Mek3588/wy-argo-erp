@@ -784,7 +784,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
               <Ionicons name="checkmark" size={36} color="#ffffff" />
             </View>
             <Text style={styles.receiptSuccessHeading}>Sale Successfully Recorded!</Text>
-            <Text style={styles.receiptCompany}>WY Argo Dairy Management</Text>
+            <Text style={styles.receiptCompany}>Bani Milk Dairy Management</Text>
 
             {completedSale && (
               <View style={styles.receiptDetailsCard}>

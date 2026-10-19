@@ -102,7 +102,7 @@ export const LoginPage: React.FC = () => {
             <Milk className="w-8 h-8" />
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
-            WY Argo <span className="text-blue-500">Dairy ERP</span>
+            Bani Milk <span className="text-blue-500">ERP</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
             {usePasswordFallback ? 'Admin Password Sign In' : 'Enter Your 6-Digit Staff PIN'}

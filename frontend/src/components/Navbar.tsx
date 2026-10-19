@@ -9,6 +9,7 @@ export const Navbar: React.FC = () => {
   const roleColors: Record<Role, string> = {
     ADMIN: 'bg-rose-100 text-rose-800 border-rose-300',
     MANAGER: 'bg-purple-100 text-purple-800 border-purple-300',
+    FINANCE: 'bg-amber-100 text-amber-800 border-amber-300',
     SALES_CASHIER: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     INVENTORY_CLERK: 'bg-blue-100 text-blue-800 border-blue-300',
   };
@@ -16,6 +17,7 @@ export const Navbar: React.FC = () => {
   const roleLabels: Record<Role, string> = {
     ADMIN: 'Administrator',
     MANAGER: 'Dairy Manager',
+    FINANCE: 'Finance Officer',
     SALES_CASHIER: 'Sales & Cashier',
     INVENTORY_CLERK: 'Inventory Clerk',
   };
@@ -30,7 +32,7 @@ export const Navbar: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-slate-900 leading-none">
-              WY Argo <span className="text-blue-600">Dairy ERP</span>
+              Bani Milk <span className="text-blue-600">ERP</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">Inventory, Sales & Cash Flow Management</p>
           </div>

@@ -192,12 +192,13 @@ export const api = {
   getInventoryLogs: () => request<{ logs: InventoryLog[] }>('/inventory/logs'),
 
   // Sales
-  getSales: (params?: { search?: string; date?: string; category?: string; status?: string }) => {
+  getSales: (params?: { search?: string; date?: string; category?: string; status?: string; finance_status?: string }) => {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.date) query.append('date', params.date);
     if (params?.category) query.append('category', params.category);
     if (params?.status) query.append('status', params.status);
+    if (params?.finance_status) query.append('finance_status', params.finance_status);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return request<{ sales: Sale[] }>(`/sales${qs}`);
   },
@@ -232,6 +233,16 @@ export const api = {
     request<{ message: string; sale: Sale }>(`/sales/${id}`, {
       method: 'PUT',
       body: JSON.stringify(saleData),
+    }),
+  toggleFinanceVerify: (id: number) =>
+    request<{ message: string; is_finance_verified: number; finance_verified_at: string; finance_verified_by_name: string }>(
+      `/sales/${id}/finance-verify`,
+      { method: 'PATCH' }
+    ),
+  bulkFinanceVerify: (sale_ids: number[]) =>
+    request<{ message: string; count: number }>('/sales/finance-verify-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ sale_ids }),
     }),
 
   // Expenses

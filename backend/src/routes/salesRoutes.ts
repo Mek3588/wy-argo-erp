@@ -8,7 +8,7 @@ router.use(authenticateToken);
 // GET /api/sales - List sales orders with search, date, status & category filter
 router.get('/', (req: AuthRequest, res: Response): void => {
   try {
-    const { search, date, category, status } = req.query;
+    const { search, date, category, status, finance_status } = req.query;
 
     let query = `
       SELECT 
@@ -17,7 +17,13 @@ router.get('/', (req: AuthRequest, res: Response): void => {
         c.name as registered_customer_name,
         c.customer_type,
         c.current_balance as customer_balance,
-        (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as item_count
+        (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as item_count,
+        (
+          SELECT GROUP_CONCAT(p.name || ' (' || si.quantity || ' ' || p.unit || ')', ', ')
+          FROM sale_items si
+          JOIN products p ON si.product_id = p.id
+          WHERE si.sale_id = s.id
+        ) as items_summary
       FROM sales s
       LEFT JOIN users u ON s.recorded_by_user_id = u.id
       LEFT JOIN customers c ON s.customer_id = c.id
@@ -41,6 +47,14 @@ router.get('/', (req: AuthRequest, res: Response): void => {
       } else {
         query += ` AND s.payment_status = ?`;
         params.push(status);
+      }
+    }
+
+    if (finance_status && finance_status !== 'ALL') {
+      if (finance_status === 'VERIFIED') {
+        query += ` AND s.is_finance_verified = 1`;
+      } else if (finance_status === 'PENDING' || finance_status === 'UNVERIFIED') {
+        query += ` AND (s.is_finance_verified = 0 OR s.is_finance_verified IS NULL)`;
       }
     }
 
@@ -454,19 +468,33 @@ router.put('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: R
         saleId
       );
 
-      // Update Cash Flow transaction to keep books clean
-      db.prepare(`
-        UPDATE cash_transactions
-        SET amount = ?,
-            payment_method = ?,
-            description = ?
-        WHERE source = 'SALE' AND reference_id = ?
-      `).run(
-        newTotal,
-        newPaymentMethod,
-        `Sale ${existing.sale_code} [${newCategory}] - ${newCustName} (Edited by Manager)`,
-        saleId
-      );
+      // If on credit, adjust due amount and customer balance
+      if (existing.payment_method === 'CREDIT' || newPaymentMethod === 'CREDIT') {
+        const diff = newTotal - existing.total_amount;
+        if (existing.customer_id && diff !== 0) {
+          db.prepare('UPDATE customers SET current_balance = current_balance + ? WHERE id = ?').run(diff, existing.customer_id);
+        }
+        const updatedDue = Math.max(0, (existing.due_amount || existing.total_amount) + diff);
+        const updatedStatus = updatedDue <= 0 ? 'PAID' : ((existing.paid_amount || 0) > 0 ? 'PARTIALLY_PAID' : 'PENDING');
+        db.prepare('UPDATE sales SET due_amount = ?, payment_status = ? WHERE id = ?').run(updatedDue, updatedStatus, saleId);
+      }
+
+      // Update Cash Flow transaction to keep books clean (if paid upfront)
+      if (newPaymentMethod !== 'CREDIT' || (existing.paid_amount && existing.paid_amount > 0)) {
+        const cashAmount = newPaymentMethod === 'CREDIT' ? (existing.paid_amount || 0) : newTotal;
+        db.prepare(`
+          UPDATE cash_transactions
+          SET amount = ?,
+              payment_method = ?,
+              description = ?
+          WHERE source = 'SALE' AND reference_id = ?
+        `).run(
+          cashAmount,
+          newPaymentMethod === 'CREDIT' ? 'CASH' : newPaymentMethod,
+          `Sale ${existing.sale_code} [${newCategory}] - ${newCustName} (Edited by Manager)`,
+          saleId
+        );
+      }
 
       return saleId;
     });
@@ -480,6 +508,78 @@ router.put('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: R
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// PATCH /api/sales/:id/finance-verify - Finance Verification Toggle
+router.patch('/:id/finance-verify', authorizeRoles('ADMIN', 'MANAGER', 'FINANCE'), (req: AuthRequest, res: Response): void => {
+  try {
+    const saleId = Number(req.params.id);
+    const sale = db.prepare('SELECT id, is_finance_verified, sale_code FROM sales WHERE id = ?').get(saleId) as any;
+    if (!sale) {
+      res.status(404).json({ error: 'Sale record not found' });
+      return;
+    }
+
+    const newVerified = sale.is_finance_verified ? 0 : 1;
+    const verifiedAt = newVerified ? new Date().toISOString() : null;
+    const verifiedByUserId = newVerified ? req.user?.id : null;
+    const verifiedByName = newVerified ? (req.user?.full_name || req.user?.username || 'Finance') : null;
+
+    db.prepare(`
+      UPDATE sales
+      SET is_finance_verified = ?,
+          finance_verified_at = ?,
+          finance_verified_by_user_id = ?,
+          finance_verified_by_name = ?
+      WHERE id = ?
+    `).run(newVerified, verifiedAt, verifiedByUserId, verifiedByName, saleId);
+
+    res.json({
+      message: newVerified ? `Sale ${sale.sale_code} verified by Finance` : `Sale ${sale.sale_code} marked as unverified`,
+      is_finance_verified: newVerified,
+      finance_verified_at: verifiedAt,
+      finance_verified_by_name: verifiedByName,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sales/finance-verify-bulk - Batch Verify Multiple Daily Sales
+router.post('/finance-verify-bulk', authorizeRoles('ADMIN', 'MANAGER', 'FINANCE'), (req: AuthRequest, res: Response): void => {
+  try {
+    const { sale_ids } = req.body;
+    if (!sale_ids || !Array.isArray(sale_ids) || sale_ids.length === 0) {
+      res.status(400).json({ error: 'Array of sale_ids is required' });
+      return;
+    }
+
+    const verifiedAt = new Date().toISOString();
+    const verifiedByUserId = req.user?.id;
+    const verifiedByName = req.user?.full_name || req.user?.username || 'Finance';
+
+    const verifyMany = db.transaction(() => {
+      const stmt = db.prepare(`
+        UPDATE sales
+        SET is_finance_verified = 1,
+            finance_verified_at = ?,
+            finance_verified_by_user_id = ?,
+            finance_verified_by_name = ?
+        WHERE id = ?
+      `);
+      for (const id of sale_ids) {
+        stmt.run(verifiedAt, verifiedByUserId, verifiedByName, Number(id));
+      }
+    });
+
+    verifyMany();
+    res.json({
+      message: `Successfully verified ${sale_ids.length} sales`,
+      count: sale_ids.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

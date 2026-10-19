@@ -35,7 +35,7 @@ export const Header: React.FC = () => {
             <Ionicons name="nutrition-outline" size={20} color="#047857" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>WY Argo Dairy</Text>
+            <Text style={styles.brandTitle}>Bani Milk</Text>
             {user && (
               <View style={styles.userRow}>
                 <Text style={styles.userName} numberOfLines={1}>

@@ -63,7 +63,7 @@ export const PinLoginScreen: React.FC = () => {
         <View style={styles.topBar}>
           <View style={styles.logoBadge}>
             <Ionicons name="nutrition" size={24} color="#047857" />
-            <Text style={styles.logoTitle}>WY Argo Dairy</Text>
+            <Text style={styles.logoTitle}>Bani Milk</Text>
           </View>
           <TouchableOpacity
             style={styles.serverPill}

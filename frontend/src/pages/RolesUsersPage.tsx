@@ -38,6 +38,7 @@ export const RolesUsersPage: React.FC = () => {
     MANAGER: 'bg-purple-100 text-purple-800 border-purple-300',
     SALES_CASHIER: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     INVENTORY_CLERK: 'bg-blue-100 text-blue-800 border-blue-300',
+    FINANCE: 'bg-amber-100 text-amber-800 border-amber-300',
   };
 
   const loadUsers = async () => {
@@ -367,6 +368,7 @@ export const RolesUsersPage: React.FC = () => {
               >
                 <option value="SALES_CASHIER">SALES_CASHIER (Counter & POS)</option>
                 <option value="INVENTORY_CLERK">INVENTORY_CLERK (Intake & Spoilage)</option>
+                <option value="FINANCE">FINANCE (Cash Verification & Accounts)</option>
                 <option value="MANAGER">MANAGER (Operations & Finance)</option>
                 <option value="ADMIN">ADMIN (Full Access)</option>
               </select>

@@ -816,8 +816,8 @@ export const InventoryPage: React.FC = () => {
               <input
                 required
                 type="number"
-                min="0.5"
-                step="0.5"
+                min="0.01"
+                step="any"
                 value={stockInForm.quantity}
                 onChange={(e) => setStockInForm({ ...stockInForm, quantity: Number(e.target.value) })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono font-bold"
@@ -828,7 +828,7 @@ export const InventoryPage: React.FC = () => {
               <input
                 type="number"
                 min="0"
-                step="0.5"
+                step="any"
                 value={stockInForm.cost_per_unit}
                 onChange={(e) => setStockInForm({ ...stockInForm, cost_per_unit: Number(e.target.value) })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"

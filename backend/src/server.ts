@@ -40,12 +40,12 @@ app.use('/api/dashboard', dashboardRoutes);
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    service: 'WY Argo Dairy ERP API',
+    service: 'Bani Milk ERP API',
     timestamp: new Date().toISOString()
   });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🥛 WY Argo Dairy ERP Backend running on http://0.0.0.0:${PORT}`);
+  console.log(`🥛 Bani Milk ERP Backend running on http://0.0.0.0:${PORT}`);
 });
 

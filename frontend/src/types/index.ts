@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'MANAGER' | 'SALES_CASHIER' | 'INVENTORY_CLERK';
+export type Role = 'ADMIN' | 'MANAGER' | 'SALES_CASHIER' | 'INVENTORY_CLERK' | 'FINANCE';
 
 export interface StaffMember {
   id: number;
@@ -161,6 +161,11 @@ export interface Sale {
   recorded_by_user_id?: number;
   cashier_name?: string;
   item_count?: number;
+  items_summary?: string;
+  is_finance_verified?: number;
+  finance_verified_at?: string;
+  finance_verified_by_user_id?: number;
+  finance_verified_by_name?: string;
   notes?: string;
   created_at: string;
 }

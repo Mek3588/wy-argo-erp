@@ -65,7 +65,7 @@ export const DashboardScreen: React.FC<Props> = ({ onNavigateTab }) => {
       {/* Welcome Banner */}
       <View style={styles.welcomeCard}>
         <View style={styles.welcomeTextCol}>
-          <Text style={styles.welcomeSub}>WY Argo Dairy Management</Text>
+          <Text style={styles.welcomeSub}>Bani Milk Dairy Management</Text>
           <Text style={styles.welcomeTitle}>
             Welcome, {(user?.full_name || user?.name || user?.username || 'Staff').split(' ')[0]}
           </Text>

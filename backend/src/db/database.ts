@@ -24,7 +24,7 @@ export function initializeDatabase() {
       password_hash TEXT NOT NULL,
       pin_hash TEXT,
       full_name TEXT NOT NULL,
-      role TEXT CHECK(role IN ('ADMIN', 'MANAGER', 'SALES_CASHIER', 'INVENTORY_CLERK')) NOT NULL,
+      role TEXT CHECK(role IN ('ADMIN', 'MANAGER', 'SALES_CASHIER', 'INVENTORY_CLERK', 'FINANCE')) NOT NULL,
       is_active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -191,6 +191,10 @@ export function initializeDatabase() {
   try { db.exec(`ALTER TABLE batches ADD COLUMN supplier_name TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE inventory_logs ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id);`); } catch (e) {}
   try { db.exec(`ALTER TABLE inventory_logs ADD COLUMN supplier_name TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN is_finance_verified INTEGER DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_at DATETIME;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_user_id INTEGER REFERENCES users(id);`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_name TEXT;`); } catch (e) {}
 
   // Backfill existing sales paid_amount and due_amount if not populated
   try {

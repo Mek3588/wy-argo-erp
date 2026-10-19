@@ -29,7 +29,7 @@ const MainApp: React.FC = () => {
         <View style={styles.splashIconWrap}>
           <Ionicons name="nutrition" size={48} color="#047857" />
         </View>
-        <Text style={styles.splashTitle}>WY Argo Dairy ERP</Text>
+        <Text style={styles.splashTitle}>Bani Milk ERP</Text>
         <Text style={styles.splashSubtitle}>Loading Dairy Operations Mobile...</Text>
         <ActivityIndicator
           size="large"

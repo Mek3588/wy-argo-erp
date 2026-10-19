@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       MANAGER: '222222',
       SALES_CASHIER: '333333',
       INVENTORY_CLERK: '444444',
+      FINANCE: '555555',
     };
 
     const pin = pinMap[targetRole];
