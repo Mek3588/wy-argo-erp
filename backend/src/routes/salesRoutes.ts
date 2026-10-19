@@ -5,18 +5,22 @@ import { authenticateToken, authorizeRoles, AuthRequest } from '../middleware/au
 const router = Router();
 router.use(authenticateToken);
 
-// GET /api/sales - List sales orders with search, date & category filter
+// GET /api/sales - List sales orders with search, date, status & category filter
 router.get('/', (req: AuthRequest, res: Response): void => {
   try {
-    const { search, date, category } = req.query;
+    const { search, date, category, status } = req.query;
 
     let query = `
       SELECT 
         s.*,
         u.full_name as cashier_name,
+        c.name as registered_customer_name,
+        c.customer_type,
+        c.current_balance as customer_balance,
         (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) as item_count
       FROM sales s
       LEFT JOIN users u ON s.recorded_by_user_id = u.id
+      LEFT JOIN customers c ON s.customer_id = c.id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -31,12 +35,22 @@ router.get('/', (req: AuthRequest, res: Response): void => {
       params.push(category);
     }
 
+    if (status && status !== 'ALL') {
+      if (status === 'CREDIT' || status === 'UNPAID') {
+        query += ` AND (s.payment_status IN ('PENDING', 'PARTIALLY_PAID') OR s.due_amount > 0)`;
+      } else {
+        query += ` AND s.payment_status = ?`;
+        params.push(status);
+      }
+    }
+
     if (search) {
       const term = `%${search}%`;
       query += ` AND (
         s.sale_code LIKE ? OR
         s.customer_name LIKE ? OR
         s.customer_phone LIKE ? OR
+        c.name LIKE ? OR
         u.full_name LIKE ? OR
         EXISTS (
           SELECT 1 FROM sale_items si 
@@ -44,7 +58,7 @@ router.get('/', (req: AuthRequest, res: Response): void => {
           WHERE si.sale_id = s.id AND p.name LIKE ?
         )
       )`;
-      params.push(term, term, term, term, term);
+      params.push(term, term, term, term, term, term);
     }
 
     query += ` ORDER BY s.created_at DESC LIMIT 200`;
@@ -99,18 +113,28 @@ interface CreateSaleItem {
 router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: AuthRequest, res: Response): void => {
   try {
     let {
+      customer_id,
       customer_name,
       customer_phone,
       sale_category = 'Retail / Walk-in',
       payment_method,
+      upfront_payment_method,
+      paid_amount,
+      due_amount,
+      due_date,
       discount = 0,
       notes,
       items
     }: {
+      customer_id?: number;
       customer_name?: string;
       customer_phone?: string;
       sale_category?: string;
       payment_method: string;
+      upfront_payment_method?: string;
+      paid_amount?: number;
+      due_amount?: number;
+      due_date?: string;
       discount?: number;
       notes?: string;
       items: CreateSaleItem[];
@@ -134,6 +158,20 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       normalizedMethod = 'CASH';
     }
     payment_method = normalizedMethod as any;
+
+    let finalCustomerId: number | null = customer_id ? Number(customer_id) : null;
+    let finalCustName = (customer_name && customer_name.trim()) || 'Walk-in Customer';
+    let finalCustPhone = customer_phone || '';
+
+    if (finalCustomerId) {
+      const cust = db.prepare('SELECT id, name, phone, current_balance, credit_limit FROM customers WHERE id = ?').get(finalCustomerId) as any;
+      if (cust) {
+        if (!customer_name || customer_name === 'Walk-in Customer') finalCustName = cust.name;
+        if (!customer_phone) finalCustPhone = cust.phone || '';
+      } else {
+        finalCustomerId = null;
+      }
+    }
 
     const executeSale = db.transaction(() => {
       let subtotal = 0;
@@ -202,23 +240,46 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       const totalAmount = Math.max(0, subtotal - (Number(discount) || 0));
       const saleCode = `SL-${Date.now().toString().slice(-6)}`;
 
+      let finalPaid = 0;
+      let finalDue = 0;
+      let finalStatus: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = 'PAID';
+
+      if (payment_method === 'CREDIT') {
+        finalPaid = Math.min(totalAmount, Math.max(0, Number(paid_amount) || 0));
+        finalDue = Math.max(0, totalAmount - finalPaid);
+        finalStatus = finalDue <= 0 ? 'PAID' : (finalPaid > 0 ? 'PARTIALLY_PAID' : 'PENDING');
+
+        // Increase registered customer's outstanding balance
+        if (finalCustomerId && finalDue > 0) {
+          db.prepare('UPDATE customers SET current_balance = current_balance + ? WHERE id = ?').run(finalDue, finalCustomerId);
+        }
+      } else {
+        finalPaid = totalAmount;
+        finalDue = 0;
+        finalStatus = 'PAID';
+      }
+
       // Insert sale
       const saleResult = db.prepare(`
         INSERT INTO sales (
-          sale_code, customer_name, customer_phone, sale_category, payment_method, payment_status,
-          subtotal, discount, total_amount, recorded_by_user_id, notes
+          sale_code, customer_id, customer_name, customer_phone, sale_category, payment_method, payment_status,
+          subtotal, discount, total_amount, paid_amount, due_amount, due_date, recorded_by_user_id, notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         saleCode,
-        customer_name || 'Walk-in Customer',
-        customer_phone || '',
+        finalCustomerId,
+        finalCustName,
+        finalCustPhone,
         sale_category,
         payment_method,
-        payment_method === 'CREDIT' ? 'PENDING' : 'PAID',
+        finalStatus,
         subtotal,
         discount || 0,
         totalAmount,
+        finalPaid,
+        finalDue,
+        due_date || null,
         req.user?.id,
         notes || ''
       );
@@ -235,16 +296,21 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
         insertLine.run(saleId, vi.product_id, vi.batch_id, vi.quantity, vi.unit_price, vi.subtotal);
       }
 
-      // Record in Cash Flow if paid
-      if (payment_method !== 'CREDIT') {
+      // Record in Cash Flow if any upfront money was received
+      if (finalPaid > 0) {
+        let cashMethod = payment_method === 'CREDIT' ? (upfront_payment_method || 'CASH') : payment_method;
+        let normCashMethod = String(cashMethod).toUpperCase();
+        if (normCashMethod === 'CBE' || normCashMethod === 'BANK') normCashMethod = 'BANK_TRANSFER';
+        if (!['CASH', 'TELEBIRR', 'BANK_TRANSFER'].includes(normCashMethod)) normCashMethod = 'CASH';
+
         db.prepare(`
           INSERT INTO cash_transactions (type, source, reference_id, amount, payment_method, description, recorded_by_user_id)
           VALUES ('IN', 'SALE', ?, ?, ?, ?, ?)
         `).run(
           saleId,
-          totalAmount,
-          payment_method,
-          `Sale ${saleCode} [${sale_category}] - ${customer_name || 'Walk-in'}`,
+          finalPaid,
+          normCashMethod,
+          `Sale ${saleCode} [${sale_category}] - ${finalCustName}${payment_method === 'CREDIT' ? ' (Partial Upfront)' : ''}`,
           req.user?.id
         );
       }

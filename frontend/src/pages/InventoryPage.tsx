@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { Product, InventoryLog, DairyCategory, DairyUnit } from '../types';
+import { Product, InventoryLog, DairyCategory, DairyUnit, Supplier, Batch, SupplierCategory } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import {
@@ -12,15 +12,22 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   SlidersHorizontal,
+  Truck,
+  Layers,
+  Factory,
+  Phone,
+  MapPin,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
   const { hasRole } = useAuth();
   const canEdit = hasRole('ADMIN', 'MANAGER', 'INVENTORY_CLERK');
 
-  const [activeSubTab, setActiveSubTab] = useState<'products' | 'logs'>('products');
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'batches' | 'logs' | 'suppliers'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -31,6 +38,7 @@ export const InventoryPage: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isStockInModalOpen, setIsStockInModalOpen] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
 
   // Form states
   const [productForm, setProductForm] = useState({
@@ -49,6 +57,9 @@ export const InventoryPage: React.FC = () => {
     product_id: 0,
     quantity: 50,
     cost_per_unit: 0,
+    supplier_id: '' as number | '',
+    custom_supplier_name: '',
+    expiry_date: '',
     reference_note: 'Daily milk / product intake',
   });
 
@@ -58,15 +69,28 @@ export const InventoryPage: React.FC = () => {
     reason: 'Damaged packaging / spillage',
   });
 
+  const [supplierForm, setSupplierForm] = useState({
+    name: '',
+    phone: '',
+    contact_person: '',
+    category: 'RAW_MILK' as SupplierCategory,
+    address: '',
+    notes: '',
+  });
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [prodRes, logRes] = await Promise.all([
+      const [prodRes, logRes, supRes, batchRes] = await Promise.all([
         api.getProducts(),
         api.getInventoryLogs(),
+        api.getSuppliers(),
+        api.getBatches(),
       ]);
       setProducts(prodRes.products);
       setLogs(logRes.logs);
+      setSuppliers(supRes.suppliers || []);
+      setBatches(batchRes.batches || []);
       if (prodRes.products.length > 0 && stockInForm.product_id === 0) {
         setStockInForm((prev) => ({
           ...prev,
@@ -128,12 +152,36 @@ export const InventoryPage: React.FC = () => {
         product_id: stockInForm.product_id,
         quantity: Number(stockInForm.quantity),
         cost_per_unit: Number(stockInForm.cost_per_unit),
+        supplier_id: stockInForm.supplier_id ? Number(stockInForm.supplier_id) : undefined,
+        supplier_name: stockInForm.custom_supplier_name || undefined,
+        expiry_date: stockInForm.expiry_date || undefined,
         reference_note: stockInForm.reference_note,
       });
       setIsStockInModalOpen(false);
       loadData();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
+    }
+  };
+
+  // Handle Add Supplier
+  const handleCreateSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supplierForm.name.trim()) return;
+    try {
+      await api.createSupplier(supplierForm);
+      setIsSupplierModalOpen(false);
+      setSupplierForm({
+        name: '',
+        phone: '',
+        contact_person: '',
+        category: 'RAW_MILK',
+        address: '',
+        notes: '',
+      });
+      loadData();
+    } catch (err: any) {
+      alert(`Error registering supplier: ${err.message}`);
     }
   };
 
@@ -158,6 +206,9 @@ export const InventoryPage: React.FC = () => {
       product_id: p.id,
       quantity: 50,
       cost_per_unit: p.unit_cost,
+      supplier_id: '',
+      custom_supplier_name: '',
+      expiry_date: '',
       reference_note: `Restock ${p.name}`,
     });
     setIsStockInModalOpen(true);
@@ -202,10 +253,10 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
+      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveSubTab('products')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
             activeSubTab === 'products'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -215,8 +266,30 @@ export const InventoryPage: React.FC = () => {
           Products & Stock on Hand ({products.length})
         </button>
         <button
+          onClick={() => setActiveSubTab('batches')}
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+            activeSubTab === 'batches'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          Fresh Batches & Suppliers ({batches.length})
+        </button>
+        <button
+          onClick={() => setActiveSubTab('suppliers')}
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+            activeSubTab === 'suppliers'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Truck className="w-4 h-4" />
+          Suppliers Directory ({suppliers.length})
+        </button>
+        <button
           onClick={() => setActiveSubTab('logs')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
             activeSubTab === 'logs'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -339,7 +412,145 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: LOGS */}
+      {/* TAB 2: FRESH BATCHES & TRACEABILITY */}
+      {activeSubTab === 'batches' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Batch Number</th>
+                  <th className="py-3 px-4">Product</th>
+                  <th className="py-3 px-4">Supplier / Producer</th>
+                  <th className="py-3 px-4">Production Date</th>
+                  <th className="py-3 px-4">Expiry Date</th>
+                  <th className="py-3 px-4 text-right">Available Qty</th>
+                  <th className="py-3 px-4 text-right">Unit Cost</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {batches.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      No batch intakes recorded yet.
+                    </td>
+                  </tr>
+                ) : (
+                  batches.map((b) => (
+                    <tr key={b.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 font-mono text-xs font-bold text-blue-600">
+                        {b.batch_number}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-900">{b.product_name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{b.product_sku}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-slate-800">
+                          {b.supplier_full_name || b.supplier_name || 'In-House Farm'}
+                        </div>
+                        {b.supplier_phone && (
+                          <div className="text-[11px] text-slate-400">{b.supplier_phone}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-slate-600">{b.production_date}</td>
+                      <td className="py-3 px-4 text-xs text-slate-600">
+                        {b.expiry_date === '2099-12-31' ? 'Standard Shelf' : b.expiry_date}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-slate-900 font-mono">
+                        {b.current_quantity} / {b.initial_quantity} {b.product_unit}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-600 font-mono text-xs">
+                        {b.cost_per_unit} ETB
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            b.status === 'ACTIVE'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : b.status === 'DEPLETED'
+                              ? 'bg-slate-100 text-slate-600'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: SUPPLIERS DIRECTORY */}
+      {activeSubTab === 'suppliers' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Raw Milk Suppliers & Vendor Partners</h3>
+              <p className="text-xs text-slate-500">Farmers, collection outgrowers, and packaging distributors.</p>
+            </div>
+            {canEdit && (
+              <button
+                onClick={() => setIsSupplierModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Supplier
+              </button>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Supplier Name</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Contact Person & Phone</th>
+                    <th className="py-3 px-4">Location / Address</th>
+                    <th className="py-3 px-4 text-right">Batches Supplied</th>
+                    <th className="py-3 px-4 text-right">Total Units</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {suppliers.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 font-semibold text-slate-900">
+                        {s.name}
+                        {s.notes && <div className="text-xs text-slate-400 font-normal">{s.notes}</div>}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {s.category.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-xs">
+                        <div className="font-medium text-slate-800">{s.contact_person || 'Direct'}</div>
+                        <div className="text-slate-500">{s.phone || '-'}</div>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-slate-600">{s.address || '-'}</td>
+                      <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700">
+                        {s.batches_supplied_count || 0} batches
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        {(s.total_units_supplied || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: LOGS */}
       {activeSubTab === 'logs' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
@@ -528,15 +739,15 @@ export const InventoryPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* MODAL 2: STOCK-IN */}
+      {/* MODAL 2: STOCK-IN WITH SUPPLIER TRACKING */}
       <Modal
         isOpen={isStockInModalOpen}
         onClose={() => setIsStockInModalOpen(false)}
-        title="Stock In / Restock Inventory"
+        title="Stock In / Restock Inventory with Supplier Origin"
       >
         <form onSubmit={handleStockIn} className="space-y-4 text-sm">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Select Dairy Product</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Select Dairy Product *</label>
             <select
               required
               value={stockInForm.product_id}
@@ -559,9 +770,49 @@ export const InventoryPage: React.FC = () => {
             </select>
           </div>
 
+          {/* Supplier origin selector */}
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-700">
+                Supplier / Outgrower Source
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsSupplierModalOpen(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Add Supplier
+              </button>
+            </div>
+            <select
+              value={stockInForm.supplier_id}
+              onChange={(e) =>
+                setStockInForm({ ...stockInForm, supplier_id: e.target.value ? Number(e.target.value) : '' })
+              }
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-xs"
+            >
+              <option value="">-- In-House Dairy Farm (Own Production) --</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.category.replace(/_/g, ' ')})
+                </option>
+              ))}
+            </select>
+            {!stockInForm.supplier_id && (
+              <input
+                type="text"
+                placeholder="Or type custom producer / cooperative name (optional)"
+                value={stockInForm.custom_supplier_name}
+                onChange={(e) => setStockInForm({ ...stockInForm, custom_supplier_name: e.target.value })}
+                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity to Add</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity to Add *</label>
               <input
                 required
                 type="number"
@@ -585,15 +836,26 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Reference / Note</label>
-            <input
-              type="text"
-              placeholder="e.g. Farm collection batch #40"
-              value={stockInForm.reference_note}
-              onChange={(e) => setStockInForm({ ...stockInForm, reference_note: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Expiry Date (Optional)</label>
+              <input
+                type="date"
+                value={stockInForm.expiry_date}
+                onChange={(e) => setStockInForm({ ...stockInForm, expiry_date: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Reference / Note</label>
+              <input
+                type="text"
+                placeholder="e.g. Morning chilled batch #12"
+                value={stockInForm.reference_note}
+                onChange={(e) => setStockInForm({ ...stockInForm, reference_note: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -675,6 +937,106 @@ export const InventoryPage: React.FC = () => {
               className="px-5 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-semibold shadow-xs"
             >
               Confirm Adjustment
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL 4: ADD SUPPLIER */}
+      <Modal
+        isOpen={isSupplierModalOpen}
+        onClose={() => setIsSupplierModalOpen(false)}
+        title="Register Supplier / Outgrower"
+      >
+        <form onSubmit={handleCreateSupplier} className="space-y-4 text-sm">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Name *</label>
+            <input
+              required
+              type="text"
+              placeholder="e.g. Sululta Dairy Co-op or Ethio Pack"
+              value={supplierForm.name}
+              onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Category</label>
+              <select
+                value={supplierForm.category}
+                onChange={(e) =>
+                  setSupplierForm({ ...supplierForm, category: e.target.value as SupplierCategory })
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              >
+                <option value="RAW_MILK">Raw Milk Farm / Outgrower</option>
+                <option value="PACKAGING">Packaging Materials</option>
+                <option value="FEED_FODDER">Feed & Fodder</option>
+                <option value="EQUIPMENT_INGREDIENTS">Equipment & Cultures</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number</label>
+              <input
+                type="text"
+                placeholder="0911..."
+                value={supplierForm.phone}
+                onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Person</label>
+              <input
+                type="text"
+                placeholder="Representative name"
+                value={supplierForm.contact_person}
+                onChange={(e) => setSupplierForm({ ...supplierForm, contact_person: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Farm / Address Location</label>
+              <input
+                type="text"
+                placeholder="Town / Region"
+                value={supplierForm.address}
+                onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Notes</label>
+            <textarea
+              rows={2}
+              placeholder="Delivery terms, collection time..."
+              value={supplierForm.notes}
+              onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsSupplierModalOpen(false)}
+              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-xs"
+            >
+              Register Supplier
             </button>
           </div>
         </form>

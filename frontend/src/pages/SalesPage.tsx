@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { api } from '../api/client';
-import { Product, Sale, PaymentMethod } from '../types';
+import { Product, Sale, PaymentMethod, Customer, CustomerType } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import {
@@ -18,6 +18,11 @@ import {
   Eye,
   Edit2,
   RotateCcw,
+  User,
+  Users,
+  AlertCircle,
+  DollarSign,
+  Clock,
 } from 'lucide-react';
 
 interface CartItem {
@@ -41,25 +46,49 @@ export const SalesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
 
   // POS State
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [customerMode, setCustomerMode] = useState<'walkin' | 'registered'>('walkin');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [customerPhone, setCustomerPhone] = useState('');
   const [saleCategory, setSaleCategory] = useState('Retail / Walk-in');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
+  const [isPartialCredit, setIsPartialCredit] = useState(false);
+  const [upfrontPaidAmount, setUpfrontPaidAmount] = useState('');
+  const [upfrontMethod, setUpfrontMethod] = useState<PaymentMethod>('CASH');
+  const [dueDate, setDueDate] = useState('');
   const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState('');
   const [searchProduct, setSearchProduct] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [saleSuccess, setSaleSuccess] = useState<Sale | null>(null);
 
+  // Quick Customer Modal
+  const [isQuickCustomerModalOpen, setIsQuickCustomerModalOpen] = useState(false);
+  const [quickCustomer, setQuickCustomer] = useState({
+    name: '',
+    phone: '',
+    customer_type: 'RETAIL' as CustomerType,
+    credit_limit: '',
+  });
+
+  // Repayment Modal State (Direct Collection from History)
+  const [repaymentSale, setRepaymentSale] = useState<Sale | null>(null);
+  const [repaymentAmount, setRepaymentAmount] = useState('');
+  const [repaymentMethod, setRepaymentMethod] = useState<PaymentMethod>('CASH');
+  const [repaymentRef, setRepaymentRef] = useState('');
+  const [submittingRepayment, setSubmittingRepayment] = useState(false);
+
   // Search & Filter State in History
   const todayStr = new Date().toISOString().split('T')[0];
   const [filterSearch, setFilterSearch] = useState('');
   const [filterDate, setFilterDate] = useState<string>(todayStr);
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
   // History detail modal
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -80,16 +109,19 @@ export const SalesPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [prodRes, saleRes] = await Promise.all([
+      const [prodRes, saleRes, custRes] = await Promise.all([
         api.getProducts(),
         api.getSales({
           search: filterSearch || undefined,
           date: filterDate || undefined,
           category: filterCategory !== 'ALL' ? filterCategory : undefined,
+          status: filterStatus !== 'ALL' ? filterStatus : undefined,
         }),
+        api.getCustomers(),
       ]);
       setProducts(prodRes.products);
       setSales(saleRes.sales);
+      setCustomers(custRes.customers || []);
     } catch (err: any) {
       alert(`Error loading sales data: ${err.message}`);
     } finally {
@@ -99,7 +131,7 @@ export const SalesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [filterDate, filterCategory]);
+  }, [filterDate, filterCategory, filterStatus]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,11 +196,24 @@ export const SalesPage: React.FC = () => {
 
     try {
       setSubmitting(true);
+      const selCustomer = customers.find((c) => c.id === selectedCustomerId);
+      const isCredit = paymentMethod === 'CREDIT';
+      const paidAmt = isCredit ? Number(upfrontPaidAmount || 0) : total;
+      const dueAmt = Math.max(0, total - paidAmt);
+
       const payload = {
-        customer_name: customerName,
-        customer_phone: customerPhone,
+        customer_id: customerMode === 'registered' && selectedCustomerId ? selectedCustomerId : undefined,
+        customer_name: customerMode === 'registered' && selCustomer ? selCustomer.name : customerName,
+        customer_phone:
+          customerMode === 'registered' && selCustomer
+            ? selCustomer.phone || customerPhone
+            : customerPhone,
         sale_category: saleCategory,
         payment_method: paymentMethod,
+        upfront_payment_method: isCredit && paidAmt > 0 ? upfrontMethod : undefined,
+        paid_amount: paidAmt,
+        due_amount: dueAmt,
+        due_date: isCredit && dueDate ? dueDate : undefined,
         discount: Number(discount),
         notes,
         items: cart.map((i) => ({
@@ -181,9 +226,15 @@ export const SalesPage: React.FC = () => {
       const res = await api.createSale(payload);
       setSaleSuccess(res.sale);
       setCart([]);
+      setCustomerMode('walkin');
+      setSelectedCustomerId(null);
       setCustomerName('Walk-in Customer');
       setCustomerPhone('');
       setSaleCategory('Retail / Walk-in');
+      setPaymentMethod('CASH');
+      setIsPartialCredit(false);
+      setUpfrontPaidAmount('');
+      setDueDate('');
       setDiscount(0);
       setNotes('');
       loadData();
@@ -191,6 +242,60 @@ export const SalesPage: React.FC = () => {
       alert(`Sale failed: ${err.message}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleQuickAddCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickCustomer.name.trim()) return;
+    try {
+      const res = await api.createCustomer({
+        name: quickCustomer.name.trim(),
+        phone: quickCustomer.phone.trim() || undefined,
+        customer_type: quickCustomer.customer_type,
+        credit_limit: Number(quickCustomer.credit_limit) || 0,
+      });
+      setIsQuickCustomerModalOpen(false);
+      setQuickCustomer({
+        name: '',
+        phone: '',
+        customer_type: 'RETAIL',
+        credit_limit: '',
+      });
+      await loadData();
+      if (res.customer) {
+        setCustomerMode('registered');
+        setSelectedCustomerId(res.customer.id);
+      }
+    } catch (err: any) {
+      alert(`Failed to create customer: ${err.message}`);
+    }
+  };
+
+  const handleCollectRepayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repaymentSale || !repaymentSale.customer_id) return;
+    const amt = Number(repaymentAmount);
+    if (!amt || amt <= 0) {
+      alert('Please enter a valid repayment amount');
+      return;
+    }
+    try {
+      setSubmittingRepayment(true);
+      await api.recordCustomerPayment(repaymentSale.customer_id, {
+        amount: amt,
+        payment_method: repaymentMethod,
+        receipt_ref: repaymentRef.trim() || undefined,
+        sale_id: repaymentSale.id,
+        notes: `Settlement for invoice ${repaymentSale.sale_code}`,
+      });
+      setRepaymentSale(null);
+      alert(`Repayment of ${amt.toLocaleString()} ETB recorded successfully!`);
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to record repayment: ${err.message}`);
+    } finally {
+      setSubmittingRepayment(false);
     }
   };
 
@@ -480,27 +585,115 @@ export const SalesPage: React.FC = () => {
 
             {/* Billing Form */}
             <form onSubmit={handleCheckout} className="space-y-3 pt-3 border-t border-slate-100 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer Name</label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Walk-in Customer"
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                  />
+              {/* Customer Type Toggle */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer Profile</label>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerMode('walkin');
+                      setSelectedCustomerId(null);
+                      setCustomerName('Walk-in Customer');
+                      setCustomerPhone('');
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1 ${
+                      customerMode === 'walkin'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    Walk-in Customer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerMode('registered');
+                      if (customers.length > 0 && !selectedCustomerId) {
+                        setSelectedCustomerId(customers[0].id);
+                        setCustomerName(customers[0].name);
+                        setCustomerPhone(customers[0].phone || '');
+                      }
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1 ${
+                      customerMode === 'registered'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Registered Account
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Customer Phone</label>
-                  <input
-                    type="text"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="+251..."
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
+
+                {customerMode === 'registered' ? (
+                  <div className="space-y-2 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-blue-900">Select Client</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuickCustomerModalOpen(true)}
+                        className="text-[11px] text-blue-600 font-bold hover:underline flex items-center gap-0.5"
+                      >
+                        <Plus className="w-3 h-3" /> New Customer
+                      </button>
+                    </div>
+                    <select
+                      value={selectedCustomerId || ''}
+                      onChange={(e) => {
+                        const cid = Number(e.target.value);
+                        setSelectedCustomerId(cid);
+                        const c = customers.find((cust) => cust.id === cid);
+                        if (c) {
+                          setCustomerName(c.name);
+                          setCustomerPhone(c.phone || '');
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500 text-xs"
+                    >
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.customer_type.replace('_', '/')}) — Balance: {c.current_balance} ETB
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedCustomerId && (() => {
+                      const c = customers.find((cust) => cust.id === selectedCustomerId);
+                      if (!c) return null;
+                      return (
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-blue-100">
+                          <span className="text-slate-500">Current Debt Balance:</span>
+                          <span className={`font-bold ${c.current_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {c.current_balance.toLocaleString()} ETB
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Customer Name (optional)"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Phone (optional)"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Sale Category Selection */}
@@ -532,15 +725,92 @@ export const SalesPage: React.FC = () => {
                       onClick={() => setPaymentMethod(m)}
                       className={`py-1.5 text-[11px] font-semibold rounded-lg border transition-all text-center ${
                         paymentMethod === m
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          ? m === 'CREDIT'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                            : 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {m === 'BANK_TRANSFER' ? 'Bank CBE' : m === 'TELEBIRR' ? 'Telebirr' : m}
+                      {m === 'BANK_TRANSFER' ? 'Bank CBE' : m === 'TELEBIRR' ? 'Telebirr' : m === 'CREDIT' ? 'On Credit' : m}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* CREDIT / LOAN CONFIGURATION */}
+              {paymentMethod === 'CREDIT' && (
+                <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3 space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-rose-900 text-xs flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                      Credit / Loan Order
+                    </span>
+                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isPartialCredit}
+                        onChange={(e) => {
+                          setIsPartialCredit(e.target.checked);
+                          if (!e.target.checked) setUpfrontPaidAmount('');
+                        }}
+                        className="rounded text-rose-600 focus:ring-rose-500"
+                      />
+                      Partial Upfront Paid
+                    </label>
+                  </div>
+
+                  {isPartialCredit && (
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-rose-200/60">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                          Amount Paid Now (ETB)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={total}
+                          value={upfrontPaidAmount}
+                          onChange={(e) => setUpfrontPaidAmount(e.target.value)}
+                          placeholder="e.g. 500"
+                          className="w-full px-2 py-1 border border-slate-300 rounded-lg text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                          Upfront Method
+                        </label>
+                        <select
+                          value={upfrontMethod}
+                          onChange={(e) => setUpfrontMethod(e.target.value as PaymentMethod)}
+                          className="w-full px-2 py-1 border border-slate-300 rounded-lg bg-white text-xs"
+                        >
+                          <option value="CASH">Cash</option>
+                          <option value="TELEBIRR">Telebirr</option>
+                          <option value="BANK_TRANSFER">Bank CBE</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                    <div>
+                      <span className="text-slate-500 block">Agreed Due Date:</span>
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        className="w-full px-2 py-1 border border-slate-300 rounded-lg bg-white text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Remaining Loan:</span>
+                      <span className="font-bold text-rose-700 text-xs block mt-1.5">
+                        {Math.max(0, total - (Number(upfrontPaidAmount) || 0)).toLocaleString()} ETB
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Discount */}
               <div className="flex items-center justify-between">
@@ -570,6 +840,12 @@ export const SalesPage: React.FC = () => {
                   <span>Total Due:</span>
                   <span className="text-blue-600">{total.toLocaleString()} ETB</span>
                 </div>
+                {paymentMethod === 'CREDIT' && (
+                  <div className="flex justify-between text-xs font-bold text-rose-600 pt-1 border-t border-dashed border-rose-200">
+                    <span>Added to Customer Debt:</span>
+                    <span>{Math.max(0, total - (Number(upfrontPaidAmount) || 0)).toLocaleString()} ETB</span>
+                  </div>
+                )}
               </div>
 
               <button
@@ -578,10 +854,16 @@ export const SalesPage: React.FC = () => {
                 className={`w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-md ${
                   cart.length === 0 || submitting
                     ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                    : paymentMethod === 'CREDIT'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-900/20'
                     : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/20'
                 }`}
               >
-                {submitting ? 'Recording Sale...' : `Settle & Print (${total.toLocaleString()} ETB)`}
+                {submitting
+                  ? 'Recording Sale...'
+                  : paymentMethod === 'CREDIT'
+                  ? `Confirm Credit / Loan Sale (${total.toLocaleString()} ETB)`
+                  : `Settle & Print (${total.toLocaleString()} ETB)`}
               </button>
             </form>
           </div>
@@ -635,12 +917,24 @@ export const SalesPage: React.FC = () => {
                   onChange={(e) => setFilterCategory(e.target.value)}
                   className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
                 >
-                  <option value="ALL">All Sales Categories</option>
+                  <option value="ALL">All Categories</option>
                   {SALE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
                   ))}
+                </select>
+
+                {/* Status Dropdown */}
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none"
+                >
+                  <option value="ALL">All Payment Statuses</option>
+                  <option value="PAID">Fully Paid</option>
+                  <option value="PARTIALLY_PAID">Partially Paid</option>
+                  <option value="CREDIT">On Credit / Pending</option>
                 </select>
 
                 {/* Direct Excel Download Button */}
@@ -684,63 +978,113 @@ export const SalesPage: React.FC = () => {
                   <tr>
                     <th className="py-3 px-4">Receipt #</th>
                     <th className="py-3 px-4">Date & Time</th>
-                    <th className="py-3 px-4">Sales Category</th>
                     <th className="py-3 px-4">Customer</th>
-                    <th className="py-3 px-4">Cashier</th>
+                    <th className="py-3 px-4">Sales Category</th>
                     <th className="py-3 px-4">Payment</th>
-                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Total</th>
+                    <th className="py-3 px-4 text-right">Balance Due</th>
                     <th className="py-3 px-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {sales.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-blue-600">{s.sale_code}</td>
-                      <td className="py-3 px-4 text-xs text-slate-500">{s.created_at}</td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                          {s.sale_category || 'Retail / Walk-in'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900">{s.customer_name}</div>
-                        {s.customer_phone && (
-                          <div className="text-xs text-slate-400">{s.customer_phone}</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-slate-700 font-medium">
-                        {s.cashier_name || 'System'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                          {s.payment_method}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-900">
-                        {s.total_amount.toLocaleString()} ETB
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => viewSaleDetails(s)}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="View Receipt"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {canEditSales && (
-                            <button
-                              onClick={() => openEditModal(s)}
-                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                              title="Manager Edit: Correct mistake on already sold item"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
+                  {sales.map((s) => {
+                    const hasDebt = (s.due_amount || 0) > 0;
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold text-blue-600">{s.sale_code}</td>
+                        <td className="py-3 px-4 text-xs text-slate-500">{s.created_at}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900">{s.customer_name}</span>
+                            {s.customer_id ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                Reg
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
+                                Walk-in
+                              </span>
+                            )}
+                          </div>
+                          {s.customer_phone && (
+                            <div className="text-xs text-slate-400">{s.customer_phone}</div>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            {s.sale_category || 'Retail / Walk-in'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            {s.payment_method}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {s.payment_status === 'PAID' ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Paid
+                            </span>
+                          ) : s.payment_status === 'PARTIALLY_PAID' ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              Partial
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              Credit Due
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-slate-900">
+                          {s.total_amount.toLocaleString()} ETB
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {hasDebt ? (
+                            <span className="font-bold text-rose-600 text-xs">
+                              {(s.due_amount || 0).toLocaleString()} ETB
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">0.00</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => viewSaleDetails(s)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="View Receipt"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {hasDebt && s.customer_id && (
+                              <button
+                                onClick={() => {
+                                  setRepaymentSale(s);
+                                  setRepaymentAmount(String(s.due_amount || ''));
+                                  setRepaymentMethod('CASH');
+                                  setRepaymentRef('');
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Collect Debt Repayment for this sale"
+                              >
+                                <DollarSign className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canEditSales && (
+                              <button
+                                onClick={() => openEditModal(s)}
+                                className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                title="Manager Edit: Correct mistake on already sold item"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -939,6 +1283,168 @@ export const SalesPage: React.FC = () => {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* MODAL 4: QUICK ADD CUSTOMER */}
+      <Modal
+        isOpen={isQuickCustomerModalOpen}
+        onClose={() => setIsQuickCustomerModalOpen(false)}
+        title="Quick Register Customer / Client"
+      >
+        <form onSubmit={handleQuickAddCustomer} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Customer / Organization Name *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Bole Sky Hotel or Abebe Kebede"
+              value={quickCustomer.name}
+              onChange={(e) => setQuickCustomer({ ...quickCustomer, name: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+              <input
+                type="text"
+                placeholder="0911..."
+                value={quickCustomer.phone}
+                onChange={(e) => setQuickCustomer({ ...quickCustomer, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Customer Type</label>
+              <select
+                value={quickCustomer.customer_type}
+                onChange={(e) =>
+                  setQuickCustomer({ ...quickCustomer, customer_type: e.target.value as CustomerType })
+                }
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+              >
+                <option value="RETAIL">Retail Regular</option>
+                <option value="HOTEL_CAFE">Hotel / Cafe / Restaurant</option>
+                <option value="DISTRIBUTOR">Distributor / Agent</option>
+                <option value="SUPERMARKET">Supermarket / Mart</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Credit Limit (ETB)</label>
+            <input
+              type="number"
+              min="0"
+              placeholder="Maximum allowed loan (e.g. 10000)"
+              value={quickCustomer.credit_limit}
+              onChange={(e) => setQuickCustomer({ ...quickCustomer, credit_limit: e.target.value })}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">Leave blank or 0 for unlimited / custom approval.</p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsQuickCustomerModalOpen(false)}
+              className="px-3 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-xs"
+            >
+              Save & Select Customer
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL 5: DIRECT REPAYMENT / DEBT COLLECTION */}
+      <Modal
+        isOpen={!!repaymentSale}
+        onClose={() => setRepaymentSale(null)}
+        title={`Collect Debt Repayment: ${repaymentSale?.sale_code}`}
+      >
+        {repaymentSale && (
+          <form onSubmit={handleCollectRepayment} className="space-y-4 text-xs">
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-1 text-slate-700">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Debtor / Customer:</span>
+                <span className="font-bold text-slate-900">{repaymentSale.customer_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Sale Total Amount:</span>
+                <span className="font-semibold">{repaymentSale.total_amount.toLocaleString()} ETB</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-rose-200/80">
+                <span className="font-semibold text-rose-800">Remaining Balance Due:</span>
+                <span className="font-bold text-rose-700 text-sm">
+                  {(repaymentSale.due_amount || 0).toLocaleString()} ETB
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Repayment Amount (ETB) *</label>
+              <input
+                type="number"
+                required
+                min="1"
+                max={repaymentSale.due_amount || undefined}
+                value={repaymentAmount}
+                onChange={(e) => setRepaymentAmount(e.target.value)}
+                placeholder="Enter paid amount"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Payment Method</label>
+                <select
+                  value={repaymentMethod}
+                  onChange={(e) => setRepaymentMethod(e.target.value as PaymentMethod)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="CASH">Cash</option>
+                  <option value="TELEBIRR">Telebirr</option>
+                  <option value="BANK_TRANSFER">Bank CBE</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Receipt / Ref #</label>
+                <input
+                  type="text"
+                  placeholder="e.g. CBE Slip / Telebirr Txn"
+                  value={repaymentRef}
+                  onChange={(e) => setRepaymentRef(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRepaymentSale(null)}
+                className="px-3 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingRepayment}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow-xs"
+              >
+                {submittingRepayment ? 'Recording...' : 'Record Payment & Settle'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

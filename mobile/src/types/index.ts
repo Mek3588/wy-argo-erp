@@ -45,15 +45,52 @@ export interface SaleItem {
   subtotal?: number;
 }
 
+export type SupplierCategory = 'RAW_MILK' | 'PACKAGING' | 'FEED_FODDER' | 'EQUIPMENT_INGREDIENTS' | 'OTHER';
+
+export interface Supplier {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  contact_person?: string;
+  category: SupplierCategory;
+  address?: string;
+  notes?: string;
+  is_active: number;
+  created_at: string;
+}
+
+export type CustomerType = 'RETAIL' | 'WHOLESALE' | 'HOTEL_CAFE' | 'DISTRIBUTOR' | 'STAFF';
+
+export interface Customer {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  customer_type: CustomerType;
+  credit_limit: number;
+  current_balance: number;
+  notes?: string;
+  is_active: number;
+  created_at: string;
+}
+
 export interface Sale {
   id: number;
+  sale_code?: string;
   receipt_number: string;
   cashier_name: string;
   cashier_id: number;
+  customer_id?: number;
   customer_name?: string;
   customer_phone?: string;
   total_amount: number;
   payment_method: string;
+  payment_status?: string;
+  paid_amount?: number;
+  due_amount?: number;
+  due_date?: string;
   sale_category: string;
   notes?: string;
   created_at: string;

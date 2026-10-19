@@ -10,6 +10,9 @@ import expenseRoutes from './routes/expenseRoutes';
 import cashflowRoutes from './routes/cashflowRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 
+import supplierRoutes from './routes/supplierRoutes';
+import customerRoutes from './routes/customerRoutes';
+
 dotenv.config();
 
 const app = express();
@@ -25,6 +28,8 @@ initializeDatabase();
 // Route Handlers
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/expenses', expenseRoutes);

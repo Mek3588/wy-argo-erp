@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { SalesPage } from './pages/SalesPage';
+import { CustomersPage } from './pages/CustomersPage';
 import { ExpensesPage } from './pages/ExpensesPage';
 import { CashFlowPage } from './pages/CashFlowPage';
 import { RolesUsersPage } from './pages/RolesUsersPage';
@@ -38,6 +39,7 @@ const MainLayout: React.FC = () => {
           {activeTab === 'dashboard' && <DashboardPage setActiveTab={setActiveTab} />}
           {activeTab === 'inventory' && <InventoryPage />}
           {activeTab === 'sales' && <SalesPage />}
+          {activeTab === 'customers' && <CustomersPage />}
           {activeTab === 'expenses' && <ExpensesPage />}
           {activeTab === 'cashflow' && <CashFlowPage />}
           {activeTab === 'users' && <RolesUsersPage />}

@@ -89,8 +89,74 @@ export const api = {
       method: 'DELETE',
     }),
 
+  // Suppliers
+  getSuppliers: () => request<{ suppliers: import('../types').Supplier[] }>('/suppliers'),
+  getSupplierDetails: (id: number) =>
+    request<{ supplier: import('../types').Supplier; batches: Batch[] }>(`/suppliers/${id}`),
+  createSupplier: (data: Partial<import('../types').Supplier>) =>
+    request<{ message: string; supplier: import('../types').Supplier }>('/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateSupplier: (id: number, data: Partial<import('../types').Supplier>) =>
+    request<{ message: string; supplier: import('../types').Supplier }>(`/suppliers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteSupplier: (id: number) =>
+    request<{ message: string }>(`/suppliers/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Customers & Accounts Receivable
+  getCustomers: (params?: { search?: string; type?: string; has_debt?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.type) query.append('type', params.type);
+    if (params?.has_debt) query.append('has_debt', 'true');
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<{ customers: import('../types').Customer[] }>(`/customers${qs}`);
+  },
+  getCustomerDetails: (id: number) =>
+    request<{
+      customer: import('../types').Customer;
+      sales: Sale[];
+      payments: import('../types').CustomerPayment[];
+    }>(`/customers/${id}`),
+  createCustomer: (data: Partial<import('../types').Customer>) =>
+    request<{ message: string; customer: import('../types').Customer }>('/customers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateCustomer: (id: number, data: Partial<import('../types').Customer>) =>
+    request<{ message: string; customer: import('../types').Customer }>(`/customers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  recordCustomerPayment: (
+    customerId: number,
+    data: {
+      amount: number;
+      payment_method: string;
+      receipt_ref?: string;
+      notes?: string;
+      sale_id?: number;
+    }
+  ) =>
+    request<{ message: string; payment_id: number; new_balance: number }>(`/customers/${customerId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getReceivablesSummary: () =>
+    request<{
+      summary: { total_receivables: number; debtor_count: number; over_limit_count: number };
+      top_debtors: import('../types').Customer[];
+      pending_credit_sales: Sale[];
+    }>('/customers/receivables/summary'),
+
   // Inventory
   getProducts: () => request<{ products: Product[] }>('/inventory/products'),
+  getBatches: () => request<{ batches: Batch[] }>('/inventory/batches'),
   createProduct: (data: Partial<Product> & { initial_stock?: number }) =>
     request<{ message: string; product: Product }>('/inventory/products', {
       method: 'POST',
@@ -106,8 +172,11 @@ export const api = {
     quantity: number;
     cost_per_unit?: number;
     reference_note?: string;
+    supplier_id?: number;
+    supplier_name?: string;
+    expiry_date?: string;
   }) =>
-    request<{ message: string }>('/inventory/stock-in', {
+    request<{ message: string; batch_id?: number }>('/inventory/stock-in', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -123,20 +192,26 @@ export const api = {
   getInventoryLogs: () => request<{ logs: InventoryLog[] }>('/inventory/logs'),
 
   // Sales
-  getSales: (params?: { search?: string; date?: string; category?: string }) => {
+  getSales: (params?: { search?: string; date?: string; category?: string; status?: string }) => {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.date) query.append('date', params.date);
     if (params?.category) query.append('category', params.category);
+    if (params?.status) query.append('status', params.status);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return request<{ sales: Sale[] }>(`/sales${qs}`);
   },
   getSaleDetails: (id: number) => request<{ sale: Sale; items: any[] }>(`/sales/${id}`),
   createSale: (saleData: {
+    customer_id?: number;
     customer_name?: string;
     customer_phone?: string;
     sale_category?: string;
     payment_method: string;
+    upfront_payment_method?: string;
+    paid_amount?: number;
+    due_amount?: number;
+    due_date?: string;
     discount?: number;
     notes?: string;
     items: Array<{ product_id: number; quantity: number; unit_price?: number }>;

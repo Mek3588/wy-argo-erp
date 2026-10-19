@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
+  Users,
   Receipt,
   Wallet,
   ShieldCheck,
@@ -46,6 +47,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       icon: ShoppingCart,
       roles: ['ADMIN', 'MANAGER', 'SALES_CASHIER'],
       description: 'Cashier & customer billing',
+    },
+    {
+      id: 'customers',
+      label: 'Customers & Credit',
+      icon: Users,
+      roles: ['ADMIN', 'MANAGER', 'SALES_CASHIER'],
+      description: 'Receivables & loan accounts',
     },
     {
       id: 'expenses',

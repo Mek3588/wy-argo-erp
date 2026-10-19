@@ -136,27 +136,105 @@ export function initializeDatabase() {
       recorded_by_user_id INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Suppliers / Providers (Raw milk outgrowers, packaging, feed, etc.)
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      contact_person TEXT,
+      category TEXT CHECK(category IN ('RAW_MILK', 'PACKAGING', 'FEED_FODDER', 'EQUIPMENT_INGREDIENTS', 'OTHER')) DEFAULT 'RAW_MILK',
+      address TEXT,
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Registered Customers (Hotels, cafes, supermarkets, regular buyers)
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      address TEXT,
+      customer_type TEXT CHECK(customer_type IN ('RETAIL', 'WHOLESALE', 'HOTEL_CAFE', 'DISTRIBUTOR', 'STAFF')) DEFAULT 'RETAIL',
+      credit_limit REAL DEFAULT 0,
+      current_balance REAL DEFAULT 0,
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Customer Repayments (Accounts Receivable / Debt Collection Ledger)
+    CREATE TABLE IF NOT EXISTS customer_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      sale_id INTEGER REFERENCES sales(id) ON DELETE SET NULL,
+      amount REAL NOT NULL,
+      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER')) NOT NULL,
+      receipt_ref TEXT,
+      notes TEXT,
+      recorded_by_user_id INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  // Migration check: Ensure pin_hash column exists
-  try {
-    db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT;`);
-  } catch (e) {
-    // Column already exists
-  }
+  // Migration checks
+  try { db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN sale_category TEXT DEFAULT 'Retail / Walk-in';`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN customer_id INTEGER REFERENCES customers(id);`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN paid_amount REAL DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN due_amount REAL DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sales ADD COLUMN due_date DATE;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE batches ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id);`); } catch (e) {}
+  try { db.exec(`ALTER TABLE batches ADD COLUMN supplier_name TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE inventory_logs ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id);`); } catch (e) {}
+  try { db.exec(`ALTER TABLE inventory_logs ADD COLUMN supplier_name TEXT;`); } catch (e) {}
 
-  // Migration check: Ensure sale_category column exists
+  // Backfill existing sales paid_amount and due_amount if not populated
   try {
-    db.exec(`ALTER TABLE sales ADD COLUMN sale_category TEXT DEFAULT 'Retail / Walk-in';`);
-  } catch (e) {
-    // Column already exists
-  }
+    db.exec(`UPDATE sales SET paid_amount = total_amount, due_amount = 0 WHERE (paid_amount IS NULL OR paid_amount = 0) AND payment_status = 'PAID';`);
+    db.exec(`UPDATE sales SET paid_amount = 0, due_amount = total_amount WHERE (due_amount IS NULL OR due_amount = 0) AND payment_status = 'PENDING';`);
+  } catch (e) {}
 
   // Seed default admin if users are empty
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
   if (userCount === 0) {
     seedAdminOnly();
   }
+
+  // Seed initial sample suppliers if empty
+  const supplierCount = (db.prepare('SELECT COUNT(*) as count FROM suppliers').get() as { count: number }).count;
+  if (supplierCount === 0) {
+    seedInitialSuppliers();
+  }
+
+  // Seed initial sample customers if empty
+  const customerCount = (db.prepare('SELECT COUNT(*) as count FROM customers').get() as { count: number }).count;
+  if (customerCount === 0) {
+    seedInitialCustomers();
+  }
+}
+
+function seedInitialSuppliers() {
+  const insert = db.prepare(`
+    INSERT INTO suppliers (name, phone, contact_person, category, address, notes)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  insert.run('Sululta Dairy Farmers Co-op', '+251 911 234567', 'Ato Tadesse', 'RAW_MILK', 'Sululta Outskirts, Oromia', 'Primary morning raw whole milk collection center');
+  insert.run('Bishoftu Valley Dairy Farm', '+251 922 345678', 'W/ro Selamawit', 'RAW_MILK', 'Bishoftu Road', 'Grade-A chilled cow milk provider');
+  insert.run('Ethio Pack & Print Ltd', '+251 933 456789', 'Dawit Mekonnen', 'PACKAGING', 'Kality Industrial Zone, Addis Ababa', 'Supplies milk pouches, yogurt cups, and tamper seals');
+}
+
+function seedInitialCustomers() {
+  const insert = db.prepare(`
+    INSERT INTO customers (name, phone, email, address, customer_type, credit_limit, current_balance, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  insert.run('Bole Sky Hotel & Restaurant', '+251 911 887766', 'procurement@bolesky.com', 'Bole Medhanialem, Addis Ababa', 'HOTEL_CAFE', 50000, 0, 'Takes daily 40L milk and butter; settles on weekly credit');
+  insert.run('Fresh Corner Supermarket', '+251 922 998877', 'orders@freshcorner.et', 'Kazanchis, Addis Ababa', 'DISTRIBUTOR', 30000, 0, 'Retail distribution partner for bottled milk & yogurt');
+  insert.run('Abebe Kebede (Family)', '+251 933 112233', '', 'Sarbet, Near Canadian Embassy', 'RETAIL', 5000, 0, 'Regular neighborhood subscriber for pasteurized milk');
 }
 
 export function seedAdminOnly() {

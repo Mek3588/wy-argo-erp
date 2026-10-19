@@ -49,6 +49,10 @@ export interface Batch {
   expiry_date: string;
   cost_per_unit: number;
   status: 'ACTIVE' | 'EXPIRED' | 'DEPLETED';
+  supplier_id?: number;
+  supplier_name?: string;
+  supplier_full_name?: string;
+  supplier_phone?: string;
   created_at: string;
   product_name?: string;
   product_sku?: string;
@@ -66,10 +70,59 @@ export interface InventoryLog {
   type: 'STOCK_IN' | 'SALE' | 'SPOILAGE_WASTE' | 'ADJUSTMENT';
   quantity: number;
   reason?: string;
+  supplier_id?: number;
+  supplier_name?: string;
   user_name?: string;
   product_name?: string;
   product_unit?: string;
   batch_number?: string;
+  created_at: string;
+}
+
+export type SupplierCategory = 'RAW_MILK' | 'PACKAGING' | 'FEED_FODDER' | 'EQUIPMENT_INGREDIENTS' | 'OTHER';
+
+export interface Supplier {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  contact_person?: string;
+  category: SupplierCategory;
+  address?: string;
+  notes?: string;
+  is_active: number;
+  batches_supplied_count?: number;
+  total_units_supplied?: number;
+  created_at: string;
+}
+
+export type CustomerType = 'RETAIL' | 'WHOLESALE' | 'HOTEL_CAFE' | 'DISTRIBUTOR' | 'STAFF';
+
+export interface Customer {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  customer_type: CustomerType;
+  credit_limit: number;
+  current_balance: number;
+  notes?: string;
+  is_active: number;
+  total_orders_count?: number;
+  total_spent?: number;
+  created_at: string;
+}
+
+export interface CustomerPayment {
+  id: number;
+  customer_id: number;
+  sale_id?: number;
+  amount: number;
+  payment_method: PaymentMethod;
+  receipt_ref?: string;
+  notes?: string;
+  collected_by_name?: string;
   created_at: string;
 }
 
@@ -90,14 +143,21 @@ export interface SaleItem {
 export interface Sale {
   id: number;
   sale_code: string;
+  customer_id?: number;
   customer_name: string;
   customer_phone?: string;
+  registered_customer_name?: string;
+  customer_type?: CustomerType;
+  customer_balance?: number;
   sale_category?: string;
   payment_method: PaymentMethod;
-  payment_status: 'PAID' | 'PENDING';
+  payment_status: 'PAID' | 'PARTIALLY_PAID' | 'PENDING';
   subtotal: number;
   discount: number;
   total_amount: number;
+  paid_amount?: number;
+  due_amount?: number;
+  due_date?: string;
   recorded_by_user_id?: number;
   cashier_name?: string;
   item_count?: number;

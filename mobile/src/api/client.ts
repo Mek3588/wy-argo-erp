@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { Product, Sale, CashFlowSummary, DashboardStats, Expense, StaffMember } from '../types';
+import { Product, Sale, CashFlowSummary, DashboardStats, Expense, StaffMember, Supplier, Customer } from '../types';
 
 const STORAGE_KEY_SERVER_URL = '@wy_argo_server_url';
 const STORAGE_KEY_TOKEN = '@wy_argo_auth_token';
@@ -117,6 +117,9 @@ export const api = {
     quantity: number;
     unit_cost?: number;
     supplier?: string;
+    supplier_id?: number;
+    supplier_name?: string;
+    expiry_date?: string;
     notes?: string;
   }) => {
     return request<{ message: string; product: Product }>('/inventory/stock-in', {
@@ -125,12 +128,45 @@ export const api = {
     });
   },
 
+  // Suppliers
+  getSuppliers: async (): Promise<Supplier[]> => {
+    const res = await request<{ suppliers: Supplier[] }>('/suppliers');
+    return res.suppliers;
+  },
+
+  // Customers & Receivables
+  getCustomers: async (search?: string): Promise<Customer[]> => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    const res = await request<{ customers: Customer[] }>(`/customers${query}`);
+    return res.customers;
+  },
+
+  recordCustomerPayment: async (
+    customerId: number,
+    payload: {
+      amount: number;
+      payment_method: string;
+      receipt_ref?: string;
+      sale_id?: number;
+      notes?: string;
+    }
+  ) => {
+    return request<{ message: string; balance_settled: number; remaining_balance: number }>(
+      `/customers/${customerId}/payments`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
   // Sales
-  getSales: async (params?: { search?: string; category?: string; date?: string }): Promise<Sale[]> => {
+  getSales: async (params?: { search?: string; category?: string; date?: string; status?: string }): Promise<Sale[]> => {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.category && params.category !== 'all') query.append('category', params.category);
     if (params?.date) query.append('date', params.date);
+    if (params?.status && params.status !== 'all') query.append('status', params.status);
     
     const queryString = query.toString() ? `?${query.toString()}` : '';
     const res = await request<{ sales: Sale[] }>(`/sales${queryString}`);
@@ -138,10 +174,16 @@ export const api = {
   },
 
   createSale: async (payload: {
+    customer_id?: number;
     customer_name?: string;
     customer_phone?: string;
     sale_category: string;
     payment_method: string;
+    upfront_payment_method?: string;
+    paid_amount?: number;
+    due_amount?: number;
+    due_date?: string;
+    discount?: number;
     notes?: string;
     items: { product_id: number; quantity: number; unit_price: number }[];
   }): Promise<{ message: string; sale: Sale }> => {

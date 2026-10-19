@@ -102,14 +102,24 @@ router.put('/products/:id', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'
   }
 });
 
-// POST /api/inventory/stock-in - Quick Stock In
+// POST /api/inventory/stock-in - Quick Stock In with Supplier Tracking
 router.post('/stock-in', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
   try {
-    const { product_id, quantity, cost_per_unit, reference_note } = req.body;
+    let { product_id, quantity, cost_per_unit, reference_note, supplier_id, supplier_name, expiry_date, supplier, unit_cost, notes } = req.body;
 
     if (!product_id || !quantity || Number(quantity) <= 0) {
       res.status(400).json({ error: 'Product and positive quantity are required' });
       return;
+    }
+
+    if (cost_per_unit === undefined && unit_cost !== undefined) {
+      cost_per_unit = unit_cost;
+    }
+    if (!reference_note && notes) {
+      reference_note = notes;
+    }
+    if (!supplier_name && supplier) {
+      supplier_name = supplier;
     }
 
     const product = db.prepare('SELECT id, name, unit_cost FROM products WHERE id = ?').get(product_id) as any;
@@ -118,29 +128,48 @@ router.post('/stock-in', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), 
       return;
     }
 
+    // Resolve supplier name if ID is provided
+    let finalSupplierId = supplier_id ? Number(supplier_id) : null;
+    let finalSupplierName = supplier_name || '';
+
+    if (finalSupplierId && !finalSupplierName) {
+      const sup = db.prepare('SELECT name FROM suppliers WHERE id = ?').get(finalSupplierId) as any;
+      if (sup) {
+        finalSupplierName = sup.name;
+      }
+    }
+
     const numQty = Number(quantity);
     const unitCost = cost_per_unit !== undefined ? Number(cost_per_unit) : product.unit_cost;
     const batchCode = `STK-${Date.now().toString().slice(-6)}`;
     const today = new Date().toISOString().split('T')[0];
+    const finalExpiry = expiry_date || '2099-12-31';
 
     const tx = db.transaction(() => {
       const insert = db.prepare(`
-        INSERT INTO batches (product_id, batch_number, initial_quantity, current_quantity, production_date, expiry_date, cost_per_unit, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
-      `).run(product_id, batchCode, numQty, numQty, today, '2099-12-31', unitCost);
+        INSERT INTO batches (product_id, batch_number, initial_quantity, current_quantity, production_date, expiry_date, cost_per_unit, status, supplier_id, supplier_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+      `).run(product_id, batchCode, numQty, numQty, today, finalExpiry, unitCost, finalSupplierId, finalSupplierName);
 
       const batchId = insert.lastInsertRowid;
 
+      const reasonText = finalSupplierName 
+        ? `Stock intake from ${finalSupplierName}${reference_note ? ` (${reference_note})` : ''}`
+        : (reference_note || 'Stock intake');
+
       db.prepare(`
-        INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id)
-        VALUES (?, ?, 'STOCK_IN', ?, ?, ?)
-      `).run(product_id, batchId, numQty, reference_note || 'Stock intake', req.user?.id);
+        INSERT INTO inventory_logs (product_id, batch_id, type, quantity, reason, user_id, supplier_id, supplier_name)
+        VALUES (?, ?, 'STOCK_IN', ?, ?, ?, ?, ?)
+      `).run(product_id, batchId, numQty, reasonText, req.user?.id, finalSupplierId, finalSupplierName);
 
       return batchId;
     });
 
-    tx();
-    res.status(201).json({ message: `Successfully added ${numQty} units to stock` });
+    const newBatchId = tx();
+    res.status(201).json({
+      message: `Successfully added ${numQty} units to stock${finalSupplierName ? ` from ${finalSupplierName}` : ''}`,
+      batch_id: newBatchId
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -197,7 +226,31 @@ router.post('/adjust', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (r
   }
 });
 
-// GET /api/inventory/logs - Movement audit log
+// GET /api/inventory/batches - List active & past batches with supplier traceability
+router.get('/batches', (_req: AuthRequest, res: Response): void => {
+  try {
+    const batches = db.prepare(`
+      SELECT 
+        b.*,
+        p.name as product_name,
+        p.sku as product_sku,
+        p.unit as product_unit,
+        s.name as supplier_full_name,
+        s.phone as supplier_phone
+      FROM batches b
+      JOIN products p ON b.product_id = p.id
+      LEFT JOIN suppliers s ON b.supplier_id = s.id
+      ORDER BY b.created_at DESC
+      LIMIT 200
+    `).all();
+
+    res.json({ batches });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/inventory/logs - Movement audit log with supplier traceability
 router.get('/logs', (_req: AuthRequest, res: Response): void => {
   try {
     const logs = db.prepare(`
@@ -205,12 +258,14 @@ router.get('/logs', (_req: AuthRequest, res: Response): void => {
         l.*,
         p.name as product_name,
         p.unit as product_unit,
-        u.full_name as user_name
+        u.full_name as user_name,
+        COALESCE(l.supplier_name, s.name, '') as supplier_name
       FROM inventory_logs l
       JOIN products p ON l.product_id = p.id
       LEFT JOIN users u ON l.user_id = u.id
+      LEFT JOIN suppliers s ON l.supplier_id = s.id
       ORDER BY l.created_at DESC
-      LIMIT 100
+      LIMIT 150
     `).all();
 
     res.json({ logs });
