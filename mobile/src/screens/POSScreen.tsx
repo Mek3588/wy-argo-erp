@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 interface CartItem {
   product: Product;
   quantity: number;
+  unit_price: number;
 }
 
 const PAYMENT_METHODS = [
@@ -50,10 +51,11 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [cart, setCart] = useState<Record<number, CartItem>>({});
 
-  // Quick Custom Quantity Modal (for large bulk orders like 50L milk)
+  // Quick Custom Quantity & Flexible Price Modal
   const [bulkQtyModalVisible, setBulkQtyModalVisible] = useState<boolean>(false);
   const [bulkQtyProduct, setBulkQtyProduct] = useState<Product | null>(null);
   const [bulkQtyInput, setBulkQtyInput] = useState<string>('');
+  const [bulkPriceInput, setBulkPriceInput] = useState<string>('');
 
   // Checkout Sheet State
   const [checkoutVisible, setCheckoutVisible] = useState<boolean>(false);
@@ -86,7 +88,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
 
   const totalCartCount = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
   const totalCartAmount = Object.values(cart).reduce(
-    (sum, item) => sum + item.quantity * getProductPrice(item.product),
+    (sum, item) => sum + item.quantity * (item.unit_price ?? getProductPrice(item.product)),
     0
   );
 
@@ -102,7 +104,8 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     }
 
     setCart((prev) => {
-      const currentQty = prev[product.id]?.quantity || 0;
+      const existing = prev[product.id];
+      const currentQty = existing?.quantity || 0;
       const targetQty = currentQty + qtyToAdd;
 
       if (targetQty > product.current_stock) {
@@ -118,6 +121,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
         [product.id]: {
           product,
           quantity: targetQty,
+          unit_price: existing?.unit_price ?? getProductPrice(product),
         },
       };
     });
@@ -127,7 +131,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     setCart((prev) => {
       const item = prev[productId];
       if (!item) return prev;
-      const newQty = item.quantity + delta;
+      const newQty = Math.round((item.quantity + delta) * 100) / 100;
       if (newQty <= 0) {
         const copy = { ...prev };
         delete copy[productId];
@@ -150,7 +154,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     });
   };
 
-  const setExplicitQty = (productId: number, exactQty: number) => {
+  const setExplicitQtyAndPrice = (productId: number, exactQty: number, exactPrice?: number) => {
     if (exactQty <= 0) {
       setCart((prev) => {
         const copy = { ...prev };
@@ -176,8 +180,27 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
       [productId]: {
         product: prod,
         quantity: exactQty,
+        unit_price:
+          exactPrice !== undefined
+            ? exactPrice
+            : prev[productId]?.unit_price ?? getProductPrice(prod),
       },
     }));
+  };
+
+  const updateCartItemPrice = (productId: number, priceStr: string) => {
+    const numPrice = parseFloat(priceStr);
+    setCart((prev) => {
+      const item = prev[productId];
+      if (!item) return prev;
+      return {
+        ...prev,
+        [productId]: {
+          ...item,
+          unit_price: isNaN(numPrice) || numPrice < 0 ? 0 : numPrice,
+        },
+      };
+    });
   };
 
   const handleClearCart = () => {
@@ -188,11 +211,14 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     ]);
   };
 
-  // Open Bulk Quantity Dialog
+  // Open Bulk Quantity & Flexible Price Dialog
   const openBulkQtyModal = (product: Product) => {
     setBulkQtyProduct(product);
-    const existing = cart[product.id]?.quantity || 1;
-    setBulkQtyInput(existing.toString());
+    const existing = cart[product.id];
+    const existingQty = existing?.quantity || 1;
+    const existingPrice = existing?.unit_price ?? getProductPrice(product);
+    setBulkQtyInput(existingQty.toString());
+    setBulkPriceInput(existingPrice.toString());
     setBulkQtyModalVisible(true);
   };
 
@@ -200,10 +226,15 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     if (!bulkQtyProduct) return;
     const qty = parseFloat(bulkQtyInput);
     if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Invalid Quantity', 'Please enter a valid number.');
+      Alert.alert('Invalid Quantity', 'Please enter a valid positive number.');
       return;
     }
-    setExplicitQty(bulkQtyProduct.id, qty);
+    const price = parseFloat(bulkPriceInput);
+    if (isNaN(price) || price < 0) {
+      Alert.alert('Invalid Price', 'Please enter a valid price (or 0).');
+      return;
+    }
+    setExplicitQtyAndPrice(bulkQtyProduct.id, qty, price);
     setBulkQtyModalVisible(false);
   };
 
@@ -212,7 +243,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
     const items = Object.values(cart).map((item) => ({
       product_id: item.product.id,
       quantity: item.quantity,
-      unit_price: getProductPrice(item.product),
+      unit_price: Number(item.unit_price) || getProductPrice(item.product),
     }));
 
     if (items.length === 0) {
@@ -393,11 +424,26 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
                   {item.name}
                 </Text>
 
-                {/* Price & Unit */}
-                <View style={styles.priceContainer}>
-                  <Text style={styles.cardPrice}>{price.toLocaleString()}</Text>
-                  <Text style={styles.cardUnit}>ETB/{item.unit}</Text>
-                </View>
+                {/* Price & Unit & Flexible Price indicator */}
+                <TouchableOpacity
+                  style={styles.priceContainer}
+                  onPress={() => (inCartQty > 0 ? openBulkQtyModal(item) : addToCart(item, 1))}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                    <Text style={styles.cardPrice}>
+                      {inCartQty > 0 && cart[item.id]?.unit_price !== undefined
+                        ? cart[item.id].unit_price.toLocaleString()
+                        : price.toLocaleString()}
+                    </Text>
+                    <Text style={styles.cardUnit}> ETB/{item.unit}</Text>
+                  </View>
+                  {inCartQty > 0 && cart[item.id]?.unit_price !== price && (
+                    <View style={styles.customPriceBadge}>
+                      <Text style={styles.customPriceBadgeText}>Custom Price</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
 
                 {/* Stock on Hand */}
                 <Text
@@ -447,6 +493,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
                       >
                         <Text style={styles.stepQtyText}>{inCartQty}</Text>
                         <Text style={styles.stepQtyHint}>{item.unit}</Text>
+                        <Ionicons name="create-outline" size={11} color="#047857" style={{ marginTop: 1 }} />
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -511,33 +558,40 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
         </View>
       )}
 
-      {/* 5. Bulk Quantity Custom Input Modal */}
+      {/* 5. Custom Quantity & Flexible Price Modal */}
       <Modal visible={bulkQtyModalVisible} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
           <View style={styles.bulkQtyCard}>
-            <Text style={styles.bulkQtyTitle}>
-              Enter Quantity for {bulkQtyProduct?.name}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.bulkQtyTitle}>
+                {bulkQtyProduct?.name}
+              </Text>
+              <TouchableOpacity onPress={() => setBulkQtyModalVisible(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.bulkQtySub}>
-              Available stock: {bulkQtyProduct?.current_stock} {bulkQtyProduct?.unit}
+              Available stock: {bulkQtyProduct?.current_stock} {bulkQtyProduct?.unit} • Catalog: {getProductPrice(bulkQtyProduct)} ETB/{bulkQtyProduct?.unit}
             </Text>
 
+            {/* Quantity Input */}
+            <Text style={styles.bulkInputLabel}>Quantity ({bulkQtyProduct?.unit}):</Text>
             <TextInput
               style={styles.bulkQtyInput}
               value={bulkQtyInput}
               onChangeText={setBulkQtyInput}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               autoFocus
               selectTextOnFocus
-              placeholder="0"
+              placeholder="1"
             />
 
-            {/* Quick Preset Buttons */}
+            {/* Quick Preset Buttons for Qty */}
             <View style={styles.bulkPresetsRow}>
-              {[5, 10, 20, 50].map((preset) => (
+              {[1, 5, 10, 20, 50].map((preset) => (
                 <TouchableOpacity
                   key={preset}
                   style={styles.bulkPresetBtn}
@@ -546,6 +600,36 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
                   <Text style={styles.bulkPresetBtnText}>+{preset}</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+
+            {/* Flexible Selling Price */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              <Text style={styles.bulkInputLabel}>Flexible Price (ETB/{bulkQtyProduct?.unit}):</Text>
+              <TouchableOpacity
+                onPress={() => setBulkPriceInput(String(getProductPrice(bulkQtyProduct)))}
+                style={styles.resetPriceBtn}
+              >
+                <Text style={styles.resetPriceBtnText}>Reset ({getProductPrice(bulkQtyProduct)})</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.bulkPriceInput}
+              value={bulkPriceInput}
+              onChangeText={setBulkPriceInput}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+              placeholder="0"
+            />
+
+            {/* Estimated Total Calculation Preview */}
+            <View style={styles.calcPreviewBox}>
+              <Text style={styles.calcPreviewLabel}>Item Total:</Text>
+              <Text style={styles.calcPreviewValue}>
+                {(
+                  (parseFloat(bulkQtyInput) || 0) * (parseFloat(bulkPriceInput) || 0)
+                ).toLocaleString()}{' '}
+                ETB
+              </Text>
             </View>
 
             <View style={styles.bulkModalActions}>
@@ -560,7 +644,7 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
                 style={styles.bulkConfirmBtn}
                 onPress={handleBulkQtyConfirm}
               >
-                <Text style={styles.bulkConfirmBtnText}>Apply Quantity</Text>
+                <Text style={styles.bulkConfirmBtnText}>Apply & Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -590,41 +674,57 @@ export const POSScreen: React.FC<{ onCartCountChange?: (count: number) => void }
           </View>
 
           <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-            {/* Items Summary Table */}
+            {/* Items Summary Table with Flexible Price */}
             <Text style={styles.sheetSectionHeading}>
               Selected Dairy Items ({totalCartCount})
             </Text>
             <View style={styles.sheetItemList}>
               {Object.values(cart).map((item) => {
-                const itemPrice = getProductPrice(item.product);
+                const itemPrice = item.unit_price ?? getProductPrice(item.product);
                 const subtotal = item.quantity * itemPrice;
+                const isCustomPrice = itemPrice !== getProductPrice(item.product);
                 return (
                   <View key={item.product.id} style={styles.sheetItemRow}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={styles.sheetItemName}>{item.product.name}</Text>
-                      <Text style={styles.sheetItemCalc}>
-                        {item.quantity} {item.product.unit} × {itemPrice.toLocaleString()} ETB
-                      </Text>
+                      <View style={styles.sheetPriceRow}>
+                        <Text style={styles.sheetPriceLabel}>Price:</Text>
+                        <TextInput
+                          style={styles.sheetPriceInlineInput}
+                          value={String(item.unit_price)}
+                          onChangeText={(val) => updateCartItemPrice(item.product.id, val)}
+                          keyboardType="decimal-pad"
+                          selectTextOnFocus
+                        />
+                        <Text style={styles.sheetPriceUnit}>ETB/{item.product.unit}</Text>
+                        {isCustomPrice && (
+                          <View style={styles.sheetCustomPriceChip}>
+                            <Text style={styles.sheetCustomPriceChipText}>Custom</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
 
-                    <Text style={styles.sheetItemSubtotal}>
-                      {subtotal.toLocaleString()} ETB
-                    </Text>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <Text style={styles.sheetItemSubtotal}>
+                        {subtotal.toLocaleString()} ETB
+                      </Text>
 
-                    <View style={styles.sheetMiniStepper}>
-                      <TouchableOpacity
-                        style={styles.sheetMiniBtn}
-                        onPress={() => updateCartQty(item.product.id, -1)}
-                      >
-                        <Ionicons name="remove" size={14} color="#334155" />
-                      </TouchableOpacity>
-                      <Text style={styles.sheetMiniQty}>{item.quantity}</Text>
-                      <TouchableOpacity
-                        style={styles.sheetMiniBtn}
-                        onPress={() => updateCartQty(item.product.id, 1)}
-                      >
-                        <Ionicons name="add" size={14} color="#334155" />
-                      </TouchableOpacity>
+                      <View style={styles.sheetMiniStepper}>
+                        <TouchableOpacity
+                          style={styles.sheetMiniBtn}
+                          onPress={() => updateCartQty(item.product.id, -1)}
+                        >
+                          <Ionicons name="remove" size={14} color="#334155" />
+                        </TouchableOpacity>
+                        <Text style={styles.sheetMiniQty}>{item.quantity}</Text>
+                        <TouchableOpacity
+                          style={styles.sheetMiniBtn}
+                          onPress={() => updateCartQty(item.product.id, 1)}
+                        >
+                          <Ionicons name="add" size={14} color="#334155" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 );
@@ -1242,7 +1342,7 @@ const styles = StyleSheet.create({
   bulkPresetsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   bulkPresetBtn: {
     flex: 1,
@@ -1257,6 +1357,114 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#047857',
+  },
+  bulkInputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  bulkPriceInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#0284c7',
+    borderRadius: 14,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  resetPriceBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  resetPriceBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  calcPreviewBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  calcPreviewLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  calcPreviewValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#047857',
+  },
+  customPriceBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
+    alignSelf: 'flex-start',
+    borderWidth: 0.5,
+    borderColor: '#fde68a',
+  },
+  customPriceBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  sheetPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  sheetPriceLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  sheetPriceInlineInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+    minWidth: 54,
+    textAlign: 'center',
+  },
+  sheetPriceUnit: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  sheetCustomPriceChip: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#fde68a',
+  },
+  sheetCustomPriceChipText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#b45309',
   },
   bulkModalActions: {
     flexDirection: 'row',

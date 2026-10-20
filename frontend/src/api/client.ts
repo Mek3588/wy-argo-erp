@@ -167,6 +167,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  deleteProduct: (id: number) =>
+    request<{ message: string; archived?: boolean; deleted?: boolean }>(`/inventory/products/${id}`, {
+      method: 'DELETE',
+    }),
   stockIn: (data: {
     product_id: number;
     quantity: number;

@@ -32,6 +32,8 @@ interface CartItem {
   product: Product;
   quantity: number;
   unit_price: number;
+  rawQuantity?: string;
+  rawPrice?: string;
 }
 
 interface EditItemRow {
@@ -157,13 +159,17 @@ export const SalesPage: React.FC = () => {
     const available = product.current_stock ?? 0;
 
     if (existing) {
-      if (existing.quantity >= available) {
+      const currentQty = Number(existing.quantity) || 0;
+      if (currentQty >= available) {
         alert(`Cannot add more than available stock (${available} ${product.unit})`);
         return;
       }
+      const nextQty = Math.round((currentQty + 1) * 100) / 100;
       setCart(
         cart.map((item) =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.product.id === product.id
+            ? { ...item, quantity: nextQty, rawQuantity: String(nextQty) }
+            : item
         )
       );
     } else {
@@ -171,7 +177,16 @@ export const SalesPage: React.FC = () => {
         alert(`Product "${product.name}" is currently out of stock!`);
         return;
       }
-      setCart([...cart, { product, quantity: 1, unit_price: product.unit_price }]);
+      setCart([
+        ...cart,
+        {
+          product,
+          quantity: 1,
+          unit_price: product.unit_price,
+          rawQuantity: '1',
+          rawPrice: String(product.unit_price),
+        },
+      ]);
     }
   };
 
@@ -180,13 +195,15 @@ export const SalesPage: React.FC = () => {
       prev
         .map((item) => {
           if (item.product.id === productId) {
-            const newQty = Math.round((item.quantity + delta) * 100) / 100;
+            const currentQty = Number(item.quantity) || 0;
+            const newQty = Math.round((currentQty + delta) * 100) / 100;
             const available = item.product.current_stock ?? 0;
             if (newQty > available) {
               alert(`Maximum available stock is ${available} ${item.product.unit}`);
               return item;
             }
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
+            if (newQty <= 0) return null;
+            return { ...item, quantity: newQty, rawQuantity: String(newQty) };
           }
           return item;
         })
@@ -194,29 +211,40 @@ export const SalesPage: React.FC = () => {
     );
   };
 
-  const setItemExactQuantity = (productId: number, qty: number) => {
-    if (isNaN(qty) || qty <= 0) return;
+  const updateItemQuantity = (productId: number, strVal: string) => {
     setCart((prev) =>
       prev.map((item) => {
         if (item.product.id === productId) {
+          const parsed = parseFloat(strVal);
           const available = item.product.current_stock ?? 0;
-          if (qty > available) {
+          if (!isNaN(parsed) && parsed > available) {
             alert(`Maximum available stock is ${available} ${item.product.unit}`);
-            return { ...item, quantity: available };
+            return { ...item, quantity: available, rawQuantity: String(available) };
           }
-          return { ...item, quantity: qty };
+          return {
+            ...item,
+            rawQuantity: strVal,
+            quantity: isNaN(parsed) || parsed < 0 ? 0 : parsed,
+          };
         }
         return item;
       })
     );
   };
 
-  const setItemExactPrice = (productId: number, price: number) => {
-    if (isNaN(price) || price < 0) return;
+  const updateItemPrice = (productId: number, strVal: string) => {
     setCart((prev) =>
-      prev.map((item) =>
-        item.product.id === productId ? { ...item, unit_price: price } : item
-      )
+      prev.map((item) => {
+        if (item.product.id === productId) {
+          const parsed = parseFloat(strVal);
+          return {
+            ...item,
+            rawPrice: strVal,
+            unit_price: isNaN(parsed) || parsed < 0 ? 0 : parsed,
+          };
+        }
+        return item;
+      })
     );
   };
 
@@ -224,7 +252,10 @@ export const SalesPage: React.FC = () => {
     setCart(cart.filter((item) => item.product.id !== productId));
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  const subtotal = cart.reduce(
+    (sum, item) => sum + (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
+    0
+  );
   const total = subtotal; // Direct price, no discount needed
 
   const handleCheckout = async (e: React.FormEvent) => {
@@ -240,6 +271,12 @@ export const SalesPage: React.FC = () => {
       const isCredit = paymentMethod === 'CREDIT';
       const paidAmt = isCredit ? Number(upfrontPaidAmount || 0) : total;
       const dueAmt = Math.max(0, total - paidAmt);
+
+      const invalidItem = cart.find((i) => (Number(i.quantity) || 0) <= 0);
+      if (invalidItem) {
+        alert(`Please enter a valid quantity for "${invalidItem.product.name}"`);
+        return;
+      }
 
       const payload = {
         customer_id: customerMode === 'registered' && selectedCustomerId ? selectedCustomerId : undefined,
@@ -258,8 +295,8 @@ export const SalesPage: React.FC = () => {
         notes,
         items: cart.map((i) => ({
           product_id: i.product.id,
-          quantity: i.quantity,
-          unit_price: i.unit_price,
+          quantity: Number(i.quantity) || 0,
+          unit_price: Number(i.unit_price) || 0,
         })),
       };
 
@@ -637,10 +674,11 @@ export const SalesPage: React.FC = () => {
                 return (
                   <div
                     key={p.id}
-                    className={`bg-white border rounded-2xl p-4 flex flex-col justify-between transition-all ${
+                    onClick={() => !isOutOfStock && addToCart(p)}
+                    className={`bg-white border rounded-2xl p-4 flex flex-col justify-between transition-all select-none ${
                       isOutOfStock
-                        ? 'opacity-60 border-slate-200 bg-slate-50'
-                        : 'border-slate-200 hover:border-blue-400 hover:shadow-md'
+                        ? 'opacity-60 border-slate-200 bg-slate-50 cursor-not-allowed'
+                        : 'border-slate-200 hover:border-blue-400 hover:shadow-md cursor-pointer active:scale-[0.99]'
                     }`}
                   >
                     <div>
@@ -670,8 +708,12 @@ export const SalesPage: React.FC = () => {
                         <span className="text-xs text-slate-500 font-medium"> ETB/{p.unit}</span>
                       </div>
                       <button
+                        type="button"
                         disabled={isOutOfStock}
-                        onClick={() => addToCart(p)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(p);
+                        }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs transition-colors ${
                           isOutOfStock
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
@@ -693,10 +735,11 @@ export const SalesPage: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-blue-600" />
-                Current Cart ({cart.reduce((a, b) => a + b.quantity, 0)} items)
+                Current Cart ({cart.reduce((a, b) => a + (Number(b.quantity) || 0), 0)} items)
               </h3>
               {cart.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => setCart([])}
                   className="text-xs text-rose-600 hover:underline flex items-center gap-1"
                 >
@@ -706,65 +749,93 @@ export const SalesPage: React.FC = () => {
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto max-h-52 divide-y divide-slate-100 my-2">
+            <div className="flex-1 overflow-y-auto max-h-72 space-y-2.5 my-2 pr-1">
               {cart.length === 0 ? (
                 <div className="py-10 text-center text-slate-400 text-sm">
                   Cart is empty. Select dairy products to begin.
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.product.id} className="py-2.5 flex items-center justify-between text-xs gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-slate-800 truncate">{item.product.name}</div>
-                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500">
-                        <span>Price:</span>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={item.unit_price}
-                          onChange={(e) => setItemExactPrice(item.product.id, parseFloat(e.target.value) || 0)}
-                          className="w-16 px-1.5 py-0.5 border border-slate-300 rounded font-semibold text-slate-900 bg-white text-right focus:ring-1 focus:ring-blue-500"
-                        />
-                        <span>ETB/{item.product.unit}</span>
+                cart.map((item) => {
+                  const lineTotal = (Number(item.unit_price) || 0) * (Number(item.quantity) || 0);
+                  return (
+                    <div
+                      key={item.product.id}
+                      className="p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-xl transition-all shadow-2xs space-y-2"
+                    >
+                      {/* Top row: Name, Line total, Delete */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-slate-800 text-xs truncate block">
+                            {item.product.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {item.product.sku}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-xs whitespace-nowrap">
+                            {lineTotal.toLocaleString()} ETB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.product.id)}
+                            className="p-1 text-slate-300 hover:text-rose-600 rounded-md transition-colors"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bottom row: Flexible Unit Price & Quantity Stepper */}
+                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/60 text-xs">
+                        {/* Flexible Price input */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">Price:</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.rawPrice !== undefined ? item.rawPrice : item.unit_price}
+                            onChange={(e) => updateItemPrice(item.product.id, e.target.value)}
+                            placeholder="0"
+                            className="w-20 px-2 py-1 text-xs font-semibold text-slate-900 bg-white border border-slate-300 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                          />
+                          <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                            ETB/{item.product.unit}
+                          </span>
+                        </div>
+
+                        {/* Stepper with Decimal Quantity Input */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.product.id, -1)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs transition-colors"
+                            title="Decrease"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.rawQuantity !== undefined ? item.rawQuantity : item.quantity}
+                            onChange={(e) => updateItemQuantity(item.product.id, e.target.value)}
+                            placeholder="1"
+                            className="w-14 h-7 text-center font-bold text-xs text-slate-900 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.product.id, 1)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs transition-colors"
+                            title="Increase"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.product.id, -1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0.01"
-                        value={item.quantity}
-                        onChange={(e) => setItemExactQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                        className="w-14 px-1 py-0.5 text-center font-bold text-slate-900 border border-slate-300 rounded bg-white focus:ring-1 focus:ring-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.product.id, 1)}
-                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="p-1 ml-0.5 text-slate-300 hover:text-rose-600"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="font-bold text-slate-900 w-20 text-right">
-                      {(item.unit_price * item.quantity).toLocaleString()} ETB
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

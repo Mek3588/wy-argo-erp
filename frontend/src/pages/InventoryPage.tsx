@@ -17,11 +17,14 @@ import {
   Factory,
   Phone,
   MapPin,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
   const { hasRole } = useAuth();
   const canEdit = hasRole('ADMIN', 'MANAGER', 'INVENTORY_CLERK');
+  const canManageProducts = hasRole('ADMIN', 'MANAGER');
 
   const [activeSubTab, setActiveSubTab] = useState<'products' | 'batches' | 'logs' | 'suppliers'>('products');
   const [products, setProducts] = useState<Product[]>([]);
@@ -36,6 +39,7 @@ export const InventoryPage: React.FC = () => {
 
   // Modals
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isStockInModalOpen, setIsStockInModalOpen] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
@@ -121,12 +125,60 @@ export const InventoryPage: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Handle Add Product
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  // Open modal for Create Product
+  const openCreateProduct = () => {
+    setEditingProduct(null);
+    setProductForm({
+      sku: '',
+      name: '',
+      category: 'Milk',
+      unit: 'Liter',
+      min_stock_level: 20,
+      unit_cost: 0,
+      unit_price: 0,
+      description: '',
+      initial_stock: 0,
+    });
+    setIsProductModalOpen(true);
+  };
+
+  // Open modal for Edit Product
+  const openEditProduct = (p: Product) => {
+    setEditingProduct(p);
+    setProductForm({
+      sku: p.sku || '',
+      name: p.name,
+      category: p.category,
+      unit: p.unit,
+      min_stock_level: p.min_stock_level,
+      unit_cost: p.unit_cost,
+      unit_price: p.unit_price,
+      description: p.description || '',
+      initial_stock: 0,
+    });
+    setIsProductModalOpen(true);
+  };
+
+  // Handle Save (Create or Update) Product
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createProduct(productForm);
+      if (editingProduct) {
+        await api.updateProduct(editingProduct.id, {
+          sku: productForm.sku,
+          name: productForm.name,
+          category: productForm.category,
+          unit: productForm.unit,
+          min_stock_level: productForm.min_stock_level,
+          unit_cost: productForm.unit_cost,
+          unit_price: productForm.unit_price,
+          description: productForm.description,
+        });
+      } else {
+        await api.createProduct(productForm);
+      }
       setIsProductModalOpen(false);
+      setEditingProduct(null);
       setProductForm({
         sku: '',
         name: '',
@@ -141,6 +193,20 @@ export const InventoryPage: React.FC = () => {
       loadData();
     } catch (err: any) {
       alert(`Error: ${err.message}`);
+    }
+  };
+
+  // Handle Delete / Archive Product
+  const handleDeleteProduct = async (p: Product) => {
+    if (!window.confirm(`Are you sure you want to delete product "${p.name}" (${p.sku})?\n\nIf this product has historical sales receipts, it will be safely archived to protect receipt records. If it has no sales history, it will be permanently deleted.`)) {
+      return;
+    }
+    try {
+      const res = await api.deleteProduct(p.id);
+      alert(res.message);
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to delete product: ${err.message}`);
     }
   };
 
@@ -242,7 +308,7 @@ export const InventoryPage: React.FC = () => {
               Adjust Stock
             </button>
             <button
-              onClick={() => setIsProductModalOpen(true)}
+              onClick={openCreateProduct}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-semibold text-xs transition-all shadow-xs"
             >
               <Plus className="w-4 h-4" />
@@ -393,13 +459,33 @@ export const InventoryPage: React.FC = () => {
                         </td>
                         {canEdit && (
                           <td className="py-3 px-4 text-center">
-                            <button
-                              onClick={() => openStockInForProduct(p)}
-                              className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
-                              title="Restock Item"
-                            >
-                              + Restock
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => openStockInForProduct(p)}
+                                className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                                title="Restock Item"
+                              >
+                                + Restock
+                              </button>
+                              {canManageProducts && (
+                                <>
+                                  <button
+                                    onClick={() => openEditProduct(p)}
+                                    className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors"
+                                    title="Edit Product"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProduct(p)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg transition-colors"
+                                    title="Delete or Archive Product"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -599,13 +685,13 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 1: CREATE PRODUCT */}
+      {/* MODAL 1: CREATE OR EDIT PRODUCT */}
       <Modal
         isOpen={isProductModalOpen}
         onClose={() => setIsProductModalOpen(false)}
-        title="Add New Dairy Product"
+        title={editingProduct ? `Edit Dairy Product: ${editingProduct.name}` : 'Add New Dairy Product'}
       >
-        <form onSubmit={handleCreateProduct} className="space-y-4 text-sm">
+        <form onSubmit={handleSaveProduct} className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">SKU Code</label>
@@ -688,7 +774,7 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid ${editingProduct ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Min Reorder Level</label>
               <input
@@ -699,16 +785,18 @@ export const InventoryPage: React.FC = () => {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Opening Stock</label>
-              <input
-                type="number"
-                min="0"
-                value={productForm.initial_stock}
-                onChange={(e) => setProductForm({ ...productForm, initial_stock: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-            </div>
+            {!editingProduct && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Opening Stock</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={productForm.initial_stock}
+                  onChange={(e) => setProductForm({ ...productForm, initial_stock: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -733,7 +821,7 @@ export const InventoryPage: React.FC = () => {
               type="submit"
               className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-xs"
             >
-              Save Product
+              {editingProduct ? 'Save Product Changes' : 'Create Product'}
             </button>
           </div>
         </form>

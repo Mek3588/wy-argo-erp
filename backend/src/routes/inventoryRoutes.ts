@@ -79,11 +79,12 @@ router.post('/products', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), 
 router.put('/products/:id', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: AuthRequest, res: Response): void => {
   try {
     const productId = Number(req.params.id);
-    const { name, category, unit, min_stock_level, unit_cost, unit_price, description, is_active } = req.body;
+    const { sku, name, category, unit, min_stock_level, unit_cost, unit_price, description, is_active } = req.body;
 
     db.prepare(`
       UPDATE products
-      SET name = COALESCE(?, name),
+      SET sku = COALESCE(?, sku),
+          name = COALESCE(?, name),
           category = COALESCE(?, category),
           unit = COALESCE(?, unit),
           min_stock_level = COALESCE(?, min_stock_level),
@@ -93,10 +94,47 @@ router.put('/products/:id', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'
           is_active = COALESCE(?, is_active),
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(name, category, unit, min_stock_level, unit_cost, unit_price, description, is_active, productId);
+    `).run(sku, name, category, unit, min_stock_level, unit_cost, unit_price, description, is_active, productId);
 
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
     res.json({ message: 'Product updated successfully', product: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/inventory/products/:id - Delete / Archive product (Admin, Manager)
+router.delete('/products/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: Response): void => {
+  try {
+    const productId = Number(req.params.id);
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+    if (!product) {
+      res.status(404).json({ error: 'Product not found' });
+      return;
+    }
+
+    const salesCount = (db.prepare('SELECT COUNT(*) as count FROM sale_items WHERE product_id = ?').get(productId) as any)?.count || 0;
+
+    if (salesCount > 0) {
+      // Product has historical sales receipts; archive it so receipts stay intact
+      db.prepare('UPDATE products SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(productId);
+      res.json({
+        message: `Product "${(product as any).name}" removed from inventory (archived to preserve ${salesCount} historical sales receipt records).`,
+        archived: true,
+      });
+    } else {
+      // Safe to permanently delete
+      const delTx = db.transaction(() => {
+        db.prepare('DELETE FROM inventory_logs WHERE product_id = ?').run(productId);
+        db.prepare('DELETE FROM batches WHERE product_id = ?').run(productId);
+        db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+      });
+      delTx();
+      res.json({
+        message: `Product "${(product as any).name}" deleted successfully.`,
+        deleted: true,
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
