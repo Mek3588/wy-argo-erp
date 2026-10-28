@@ -165,9 +165,11 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
       normalizedMethod = 'BANK_TRANSFER';
     } else if (normalizedMethod === 'OTHER') {
       normalizedMethod = 'CASH';
+    } else if (normalizedMethod === 'E_BIRR' || normalizedMethod === 'E-BIRR' || normalizedMethod === 'EB' || normalizedMethod === 'E BIRR') {
+      normalizedMethod = 'EBIRR';
     }
 
-    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'];
+    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT', 'EBIRR'];
     if (!validMethods.includes(normalizedMethod)) {
       normalizedMethod = 'CASH';
     }
@@ -315,7 +317,8 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER'), (req: Auth
         let cashMethod = payment_method === 'CREDIT' ? (upfront_payment_method || 'CASH') : payment_method;
         let normCashMethod = String(cashMethod).toUpperCase();
         if (normCashMethod === 'CBE' || normCashMethod === 'BANK') normCashMethod = 'BANK_TRANSFER';
-        if (!['CASH', 'TELEBIRR', 'BANK_TRANSFER'].includes(normCashMethod)) normCashMethod = 'CASH';
+        if (normCashMethod === 'E_BIRR' || normCashMethod === 'E-BIRR' || normCashMethod === 'EB' || normCashMethod === 'E BIRR') normCashMethod = 'EBIRR';
+        if (!['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR'].includes(normCashMethod)) normCashMethod = 'CASH';
 
         db.prepare(`
           INSERT INTO cash_transactions (type, source, reference_id, amount, payment_method, description, recorded_by_user_id)
@@ -373,8 +376,10 @@ router.put('/:id', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthRequest, res: R
         rawMethod = 'BANK_TRANSFER';
       } else if (rawMethod === 'OTHER') {
         rawMethod = 'CASH';
+      } else if (rawMethod === 'E_BIRR' || rawMethod === 'E-BIRR' || rawMethod === 'EB' || rawMethod === 'E BIRR') {
+        rawMethod = 'EBIRR';
       }
-      let newPaymentMethod = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'].includes(rawMethod) ? rawMethod : 'CASH';
+      let newPaymentMethod = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT', 'EBIRR'].includes(rawMethod) ? rawMethod : 'CASH';
       let newCategory = sale_category || existing.sale_category;
       let newCustName = customer_name !== undefined ? customer_name : existing.customer_name;
       let newCustPhone = customer_phone !== undefined ? customer_phone : existing.customer_phone;

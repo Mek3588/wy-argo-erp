@@ -65,6 +65,11 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: Au
       return;
     }
 
+    let normMethod = String(payment_method || 'CASH').toUpperCase();
+    if (normMethod === 'CBE' || normMethod === 'BANK') normMethod = 'BANK_TRANSFER';
+    if (normMethod === 'E_BIRR' || normMethod === 'E-BIRR' || normMethod === 'EB' || normMethod === 'E BIRR') normMethod = 'EBIRR';
+    if (!['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR'].includes(normMethod)) normMethod = 'CASH';
+
     const expenseCode = `EXP-${Date.now().toString().slice(-6)}`;
 
     const tx = db.transaction(() => {
@@ -81,7 +86,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: Au
         category,
         numAmount,
         expense_date,
-        payment_method,
+        normMethod,
         vendor_name || '',
         req.user?.id,
         receipt_ref || '',
@@ -99,7 +104,7 @@ router.post('/', authorizeRoles('ADMIN', 'MANAGER', 'INVENTORY_CLERK'), (req: Au
       `).run(
         expenseId,
         numAmount,
-        payment_method,
+        normMethod,
         `Expense: ${title} (${category.replace(/_/g, ' ')})`,
         req.user?.id
       );

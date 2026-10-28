@@ -204,6 +204,14 @@ export const RolesUsersPage: React.FC = () => {
                 <td className="py-2.5 px-3 text-rose-400">✗ No Access</td>
                 <td className="py-2.5 px-3 text-rose-400">✗ No Access</td>
               </tr>
+              <tr>
+                <td className="py-2.5 px-3 font-bold text-amber-700">FINANCE</td>
+                <td className="py-2.5 px-3 text-slate-400">View Only</td>
+                <td className="py-2.5 px-3 text-emerald-600 font-semibold">✓ Verify & Audit</td>
+                <td className="py-2.5 px-3 text-emerald-600 font-semibold">✓ Full Access</td>
+                <td className="py-2.5 px-3 text-emerald-600 font-semibold">✓ Full Access</td>
+                <td className="py-2.5 px-3 text-slate-400">View Only</td>
+              </tr>
             </tbody>
           </table>
         </div>

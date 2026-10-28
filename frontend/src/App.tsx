@@ -35,7 +35,7 @@ const MainLayout: React.FC = () => {
       <Navbar />
       <div className="flex flex-1">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-5 lg:p-7 w-full overflow-x-hidden min-w-0">
           {activeTab === 'dashboard' && <DashboardPage setActiveTab={setActiveTab} />}
           {activeTab === 'inventory' && <InventoryPage />}
           {activeTab === 'sales' && <SalesPage />}

@@ -78,7 +78,7 @@ export function initializeDatabase() {
       customer_name TEXT DEFAULT 'Walk-in Customer',
       customer_phone TEXT,
       sale_category TEXT DEFAULT 'Retail / Walk-in',
-      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT')) NOT NULL,
+      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT', 'EBIRR')) NOT NULL,
       payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING', 'PARTIALLY_PAID')) DEFAULT 'PAID',
       subtotal REAL NOT NULL,
       discount REAL DEFAULT 0,
@@ -116,7 +116,7 @@ export function initializeDatabase() {
       )) NOT NULL,
       amount REAL NOT NULL,
       expense_date DATE NOT NULL,
-      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER')) NOT NULL,
+      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
       vendor_name TEXT,
       recorded_by_user_id INTEGER REFERENCES users(id),
       receipt_ref TEXT,
@@ -131,7 +131,7 @@ export function initializeDatabase() {
       source TEXT CHECK(source IN ('SALE', 'EXPENSE', 'MANUAL_DEPOSIT', 'MANUAL_WITHDRAWAL', 'CAPITAL')) NOT NULL,
       reference_id INTEGER,
       amount REAL NOT NULL,
-      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER')) NOT NULL,
+      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
       description TEXT NOT NULL,
       recorded_by_user_id INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -172,7 +172,7 @@ export function initializeDatabase() {
       customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
       sale_id INTEGER REFERENCES sales(id) ON DELETE SET NULL,
       amount REAL NOT NULL,
-      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER')) NOT NULL,
+      payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
       receipt_ref TEXT,
       notes TEXT,
       recorded_by_user_id INTEGER REFERENCES users(id),
@@ -196,11 +196,11 @@ export function initializeDatabase() {
   try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_user_id INTEGER REFERENCES users(id);`); } catch (e) {}
   try { db.exec(`ALTER TABLE sales ADD COLUMN finance_verified_by_name TEXT;`); } catch (e) {}
 
-  // Migrate sales table to allow 'PARTIALLY_PAID' in payment_status CHECK constraint
+  // Migrate sales table to allow 'PARTIALLY_PAID' and 'EBIRR'
   try {
     const salesTableSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sales'").get() as { sql: string } | undefined)?.sql || '';
-    if (salesTableSql && !salesTableSql.includes('PARTIALLY_PAID')) {
-      console.log('🔄 Migrating sales table schema to support PARTIALLY_PAID status...');
+    if (salesTableSql && (!salesTableSql.includes('PARTIALLY_PAID') || !salesTableSql.includes('EBIRR'))) {
+      console.log('🔄 Migrating sales table schema to support PARTIALLY_PAID and EBIRR payment method...');
       db.pragma('foreign_keys = OFF');
       const cols = (db.prepare('PRAGMA table_info(sales)').all() as { name: string }[]).map((c) => c.name);
       const colList = cols.join(', ');
@@ -213,7 +213,7 @@ export function initializeDatabase() {
           customer_name TEXT DEFAULT 'Walk-in Customer',
           customer_phone TEXT,
           sale_category TEXT DEFAULT 'Retail / Walk-in',
-          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT')) NOT NULL,
+          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT', 'EBIRR')) NOT NULL,
           payment_status TEXT CHECK(payment_status IN ('PAID', 'PENDING', 'PARTIALLY_PAID')) DEFAULT 'PAID',
           subtotal REAL NOT NULL,
           discount REAL DEFAULT 0,
@@ -237,10 +237,127 @@ export function initializeDatabase() {
         ALTER TABLE sales_mig_tmp RENAME TO sales;
       `);
       db.pragma('foreign_keys = ON');
-      console.log('✅ Sales table migrated successfully to allow PARTIALLY_PAID!');
+      console.log('✅ Sales table migrated successfully to allow PARTIALLY_PAID and EBIRR!');
     }
   } catch (err) {
-    console.error('Migration error for sales table PARTIALLY_PAID:', err);
+    console.error('Migration error for sales table EBIRR:', err);
+  }
+
+  // Migrate expenses table to allow 'EBIRR'
+  try {
+    const expensesTableSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='expenses'").get() as { sql: string } | undefined)?.sql || '';
+    if (expensesTableSql && !expensesTableSql.includes('EBIRR')) {
+      console.log('🔄 Migrating expenses table schema to support EBIRR payment method...');
+      db.pragma('foreign_keys = OFF');
+      const cols = (db.prepare('PRAGMA table_info(expenses)').all() as { name: string }[]).map((c) => c.name);
+      const colList = cols.join(', ');
+
+      db.exec(`
+        CREATE TABLE expenses_mig_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          expense_code TEXT UNIQUE NOT NULL,
+          title TEXT NOT NULL,
+          category TEXT CHECK(category IN (
+            'RAW_MILK_PROCUREMENT',
+            'FEED_FODDER',
+            'PACKAGING_MATERIALS',
+            'COLD_CHAIN_ELECTRICITY',
+            'TRANSPORT_LOGISTICS',
+            'STAFF_WAGES',
+            'EQUIPMENT_MAINTENANCE',
+            'SUPPLIES_OTHER'
+          )) NOT NULL,
+          amount REAL NOT NULL,
+          expense_date DATE NOT NULL,
+          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
+          vendor_name TEXT,
+          recorded_by_user_id INTEGER REFERENCES users(id),
+          receipt_ref TEXT,
+          notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO expenses_mig_tmp (${colList})
+        SELECT ${colList} FROM expenses;
+
+        DROP TABLE expenses;
+        ALTER TABLE expenses_mig_tmp RENAME TO expenses;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Expenses table migrated successfully to allow EBIRR!');
+    }
+  } catch (err) {
+    console.error('Migration error for expenses table EBIRR:', err);
+  }
+
+  // Migrate cash_transactions table to allow 'EBIRR'
+  try {
+    const cashTxSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='cash_transactions'").get() as { sql: string } | undefined)?.sql || '';
+    if (cashTxSql && !cashTxSql.includes('EBIRR')) {
+      console.log('🔄 Migrating cash_transactions table schema to support EBIRR payment method...');
+      db.pragma('foreign_keys = OFF');
+      const cols = (db.prepare('PRAGMA table_info(cash_transactions)').all() as { name: string }[]).map((c) => c.name);
+      const colList = cols.join(', ');
+
+      db.exec(`
+        CREATE TABLE cash_transactions_mig_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT CHECK(type IN ('IN', 'OUT')) NOT NULL,
+          source TEXT CHECK(source IN ('SALE', 'EXPENSE', 'MANUAL_DEPOSIT', 'MANUAL_WITHDRAWAL', 'CAPITAL')) NOT NULL,
+          reference_id INTEGER,
+          amount REAL NOT NULL,
+          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
+          description TEXT NOT NULL,
+          recorded_by_user_id INTEGER REFERENCES users(id),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO cash_transactions_mig_tmp (${colList})
+        SELECT ${colList} FROM cash_transactions;
+
+        DROP TABLE cash_transactions;
+        ALTER TABLE cash_transactions_mig_tmp RENAME TO cash_transactions;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Cash transactions table migrated successfully to allow EBIRR!');
+    }
+  } catch (err) {
+    console.error('Migration error for cash_transactions table EBIRR:', err);
+  }
+
+  // Migrate customer_payments table to allow 'EBIRR'
+  try {
+    const custPaySql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='customer_payments'").get() as { sql: string } | undefined)?.sql || '';
+    if (custPaySql && !custPaySql.includes('EBIRR')) {
+      console.log('🔄 Migrating customer_payments table schema to support EBIRR payment method...');
+      db.pragma('foreign_keys = OFF');
+      const cols = (db.prepare('PRAGMA table_info(customer_payments)').all() as { name: string }[]).map((c) => c.name);
+      const colList = cols.join(', ');
+
+      db.exec(`
+        CREATE TABLE customer_payments_mig_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+          sale_id INTEGER REFERENCES sales(id) ON DELETE SET NULL,
+          amount REAL NOT NULL,
+          payment_method TEXT CHECK(payment_method IN ('CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR')) NOT NULL,
+          receipt_ref TEXT,
+          notes TEXT,
+          recorded_by_user_id INTEGER REFERENCES users(id),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO customer_payments_mig_tmp (${colList})
+        SELECT ${colList} FROM customer_payments;
+
+        DROP TABLE customer_payments;
+        ALTER TABLE customer_payments_mig_tmp RENAME TO customer_payments;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Customer payments table migrated successfully to allow EBIRR!');
+    }
+  } catch (err) {
+    console.error('Migration error for customer_payments table EBIRR:', err);
   }
 
   // Backfill existing sales paid_amount and due_amount if not populated

@@ -171,7 +171,7 @@ export const DashboardScreen: React.FC<Props> = ({ onNavigateTab }) => {
 
             <View style={styles.cashBreakdown}>
               <View style={styles.cashCol}>
-                <Text style={styles.cashColLabel}>Physical Cash</Text>
+                <Text style={styles.cashColLabel}>Cash</Text>
                 <Text style={styles.cashColValue}>
                   {(cashflow?.by_method?.find((m: any) => m.payment_method === 'CASH')?.balance ?? cashflow?.cash_in_hand ?? 0).toLocaleString()} ETB
                 </Text>
@@ -181,6 +181,13 @@ export const DashboardScreen: React.FC<Props> = ({ onNavigateTab }) => {
                 <Text style={styles.cashColLabel}>Telebirr</Text>
                 <Text style={styles.cashColValue}>
                   {(cashflow?.by_method?.find((m: any) => m.payment_method === 'TELEBIRR')?.balance ?? cashflow?.telebirr_balance ?? 0).toLocaleString()} ETB
+                </Text>
+              </View>
+              <View style={styles.cashDivider} />
+              <View style={styles.cashCol}>
+                <Text style={styles.cashColLabel}>E-Birr</Text>
+                <Text style={styles.cashColValue}>
+                  {(cashflow?.by_method?.find((m: any) => m.payment_method === 'EBIRR')?.balance ?? 0).toLocaleString()} ETB
                 </Text>
               </View>
               <View style={styles.cashDivider} />

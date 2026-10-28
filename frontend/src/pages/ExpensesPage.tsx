@@ -105,116 +105,138 @@ export const ExpensesPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* 1. Industrial Header Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Dairy Expense Tracker</h2>
-          <p className="text-sm text-slate-500">
-            Log milk sourcing costs, cattle feed, chiller electricity & operational outflows.
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span className="text-xs font-mono font-bold uppercase text-slate-500 tracking-wider">
+              CASH DISBURSEMENTS & OPERATIONAL OUTFLOWS
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-xs font-mono text-rose-600 font-semibold">Ledger Linked</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+            Operating Expenses & Milk Procurement Outflows
+          </h2>
+          <p className="text-xs text-slate-500">
+            Log raw milk procurement costs, cattle feed, chiller electricity, facility CIP supplies, and operational wages.
           </p>
         </div>
 
         {canAdd && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all shadow-xs"
+            className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-2xs transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Record Expense
+            <span>Disburse Expense</span>
           </button>
         )}
       </div>
 
-      {/* Summary KPI Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+      {/* 2. Structured KPI Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-rose-500 shadow-2xs">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600">
             Total Logged Expenses
           </span>
-          <div className="text-2xl font-bold text-rose-600 mt-1">
-            -{totalExpenses.toLocaleString()} ETB
+          <div className="text-2xl font-black text-rose-600 font-mono tabular-nums mt-1">
+            -{totalExpenses.toLocaleString()} <span className="text-xs font-bold text-slate-500">ETB</span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">{expenses.length} total operational vouchers</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">{expenses.length} total operational disbursement vouchers</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Top Outflow Category
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-amber-500 shadow-2xs">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600">
+            Primary Outflow Cost Center
           </span>
-          <div className="text-lg font-bold text-slate-900 mt-1">Raw Milk Procurement</div>
-          <p className="text-xs text-slate-400 mt-1">Direct purchases from milk farmers</p>
+          <div className="text-base font-bold text-slate-900 mt-1">Raw Milk Procurement</div>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Farmer collection & outgrower supply</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Auto Cash Ledger Link
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-emerald-500 shadow-2xs">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600">
+            Automated Cash Flow Sync
           </span>
-          <div className="text-emerald-600 font-bold text-sm mt-1 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active & Synced
+          <div className="text-emerald-700 font-bold text-xs mt-1.5 flex items-center gap-1.5 font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>REAL-TIME CASH FLOW LINK ACTIVE</span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Every recorded expense updates Cash Flow</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Every logged disbursement posts directly to ledger</p>
         </div>
       </div>
 
-      {/* Category filter pills */}
-      <div className="flex flex-wrap gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+      {/* 3. Category Filter Buttons */}
+      <div className="flex flex-wrap gap-1.5 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
         <button
           onClick={() => setSelectedCategoryFilter('ALL')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`px-3 py-1 rounded-md text-xs font-semibold font-mono transition-all ${
             selectedCategoryFilter === 'ALL'
-              ? 'bg-rose-600 text-white'
+              ? 'bg-rose-600 text-white shadow-2xs'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          All Categories
+          All Categories ({expenses.length})
         </button>
-        {Object.entries(categoryLabels).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setSelectedCategoryFilter(key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedCategoryFilter === key
-                ? 'bg-rose-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {Object.entries(categoryLabels).map(([key, label]) => {
+          const count = expenses.filter((e) => e.category === key).length;
+          const isSelected = selectedCategoryFilter === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedCategoryFilter(key)}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold font-mono transition-all flex items-center gap-1.5 ${
+                isSelected
+                  ? 'bg-rose-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>{label}</span>
+              {count > 0 && (
+                <span className={`text-[10px] px-1 py-0.2 rounded ${isSelected ? 'bg-rose-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Expenses Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* 4. Expenses Data Grid */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Voucher / Code</th>
-                <th className="py-3 px-4">Title & Notes</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Vendor / Payee</th>
-                <th className="py-3 px-4">Date & Method</th>
-                <th className="py-3 px-4 text-right">Amount (ETB)</th>
-                {canDelete && <th className="py-3 px-4 text-center">Action</th>}
+                <th className="py-2.5 px-3.5 font-mono">Voucher / Code</th>
+                <th className="py-2.5 px-3.5">Disbursement Title</th>
+                <th className="py-2.5 px-3.5">Category</th>
+                <th className="py-2.5 px-3.5">Vendor / Payee</th>
+                <th className="py-2.5 px-3.5">Date & Method</th>
+                <th className="py-2.5 px-3.5 text-right font-mono">Amount Outflow</th>
+                {canDelete && <th className="py-2.5 px-3.5 text-center">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredExpenses.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="py-3 px-4">
-                    <span className="font-mono font-semibold text-rose-600">{e.expense_code}</span>
+                <tr key={e.id} className="even:bg-slate-50/40 hover:bg-rose-50/30 transition-colors">
+                  <td className="py-2.5 px-3.5">
+                    <span className="font-mono text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200/60 px-1.5 py-0.5 rounded">
+                      {e.expense_code}
+                    </span>
                     {e.receipt_ref && (
-                      <div className="text-[11px] text-slate-400">Ref: {e.receipt_ref}</div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">Ref: {e.receipt_ref}</div>
                     )}
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="font-bold text-slate-900">{e.title}</div>
-                    {e.notes && <div className="text-xs text-slate-500 mt-0.5">{e.notes}</div>}
-                    <div className="text-[10px] text-slate-400">By: {e.recorded_by_name}</div>
+                  <td className="py-2.5 px-3.5">
+                    <div className="font-bold text-slate-900 text-xs">{e.title}</div>
+                    {e.notes && <div className="text-[10px] text-slate-500 mt-0.5">{e.notes}</div>}
+                    <div className="text-[10px] text-slate-400 font-mono">By: {e.recorded_by_name}</div>
                   </td>
-                  <td className="py-3 px-4">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
+                  <td className="py-2.5 px-3.5">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-50 text-rose-800 border border-rose-200">
                       {categoryLabels[e.category] || e.category}
                     </span>
                   </td>
@@ -317,6 +339,7 @@ export const ExpensesPage: React.FC = () => {
               >
                 <option value="BANK_TRANSFER">Bank Transfer (CBE)</option>
                 <option value="TELEBIRR">Telebirr</option>
+                <option value="EBIRR">E-Birr</option>
                 <option value="CASH">Cash</option>
               </select>
             </div>

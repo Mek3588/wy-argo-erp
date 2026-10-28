@@ -197,101 +197,109 @@ export const CustomersPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Title & Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-5">
+      {/* 1. Industrial Header Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Users className="w-7 h-7 text-blue-600" />
-            Customers & Receivables (Loan Tracking)
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage registered clients, wholesale accounts, credit limits, and debt collection.
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            <span className="text-xs font-mono font-bold uppercase text-slate-500 tracking-wider">
+              COMMERCIAL ACCOUNTS & RECEIVABLES
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-xs font-mono text-purple-600 font-semibold">Credit Risk Control</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+            Customer Credit & Accounts Receivable
+          </h2>
+          <p className="text-xs text-slate-500">
+            Audit wholesale credit lines, monitor customer debt aging, and record debt recovery settlements.
           </p>
         </div>
+
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium text-sm transition-all shadow-sm shadow-blue-500/20"
+          className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition-all shadow-2xs"
         >
           <Plus className="w-4 h-4" />
-          Register New Customer
+          <span>Register Commercial Client</span>
         </button>
       </div>
 
       {statusMessage && (
         <div
-          className={`p-4 rounded-xl flex items-center gap-3 border ${
+          className={`p-3.5 rounded-xl flex items-center gap-3 border text-xs font-semibold ${
             statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
               : 'bg-rose-50 text-rose-800 border-rose-200'
           }`}
         >
           {statusMessage.type === 'success' ? (
-            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           )}
-          <span className="text-sm font-medium">{statusMessage.text}</span>
+          <span>{statusMessage.text}</span>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-            <span>Total Receivables (Owed)</span>
-            <div className="p-2 rounded-xl bg-rose-50 text-rose-600">
+      {/* 2. Enterprise Metric KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-rose-500 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-mono font-bold uppercase tracking-wider mb-2">
+            <span>Total Receivables</span>
+            <div className="w-7 h-7 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-rose-600">
-            {receivablesSummary.total_receivables.toLocaleString()} ETB
+          <div className="text-2xl font-black text-rose-600 font-mono tabular-nums">
+            {receivablesSummary.total_receivables.toLocaleString()} <span className="text-xs font-bold text-slate-500">ETB</span>
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">Outstanding customer loans & credit</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Outstanding customer loans & credit</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-            <span>Debtors Count</span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-amber-500 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-mono font-bold uppercase tracking-wider mb-2">
+            <span>Debtors in Arrears</span>
+            <div className="w-7 h-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-amber-700">
+          <div className="text-2xl font-black text-amber-700 font-mono tabular-nums">
             {receivablesSummary.debtor_count}
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">Customers with pending balances</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Accounts with unpaid balances</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-            <span>Registered Customers</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-blue-500 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-mono font-bold uppercase tracking-wider mb-2">
+            <span>Commercial Profiles</span>
+            <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
               <UserCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-800">
+          <div className="text-2xl font-black text-slate-900 font-mono tabular-nums">
             {customers.length}
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">Active commercial profiles</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Active institutional accounts</p>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-            <span>Credit Limit Warnings</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 border-t-3 border-t-purple-500 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-mono font-bold uppercase tracking-wider mb-2">
+            <span>Limit Violations</span>
+            <div className="w-7 h-7 rounded-md bg-purple-50 text-purple-600 flex items-center justify-center">
               <Building className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-purple-700">
+          <div className="text-2xl font-black text-purple-700 font-mono tabular-nums">
             {receivablesSummary.over_limit_count}
           </div>
-          <p className="text-xs text-slate-500 mt-1.5">Debts exceeding assigned limits</p>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">Debts exceeding assigned thresholds</p>
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      {/* 3. Filter & Search Bar */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -349,82 +357,84 @@ export const CustomersPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-xs text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Customer Name</th>
-                  <th className="py-3.5 px-4">Type</th>
-                  <th className="py-3.5 px-4">Contact & Location</th>
-                  <th className="py-3.5 px-4 text-right">Credit Limit</th>
-                  <th className="py-3.5 px-4 text-right">Outstanding Debt</th>
-                  <th className="py-3.5 px-4 text-right">Orders</th>
-                  <th className="py-3.5 px-4 text-center">Actions</th>
+                <tr className="bg-slate-100/70 border-b border-slate-200 text-[10px] font-mono font-bold text-slate-700 uppercase tracking-wider">
+                  <th className="py-2.5 px-3.5 font-mono">Commercial Account</th>
+                  <th className="py-2.5 px-3.5">Category</th>
+                  <th className="py-2.5 px-3.5">Contact & Location</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Approved Limit</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Current Debt</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Total Orders</th>
+                  <th className="py-2.5 px-3.5 text-center">Settlement Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {customers.map((c) => {
                   const hasDebt = c.current_balance > 0;
                   const isOverLimit = c.credit_limit > 0 && c.current_balance > c.credit_limit;
                   return (
-                    <tr key={c.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900">{c.name}</div>
-                        {c.notes && <div className="text-xs text-slate-400 truncate max-w-xs">{c.notes}</div>}
+                    <tr key={c.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
+                      <td className="py-2.5 px-3.5">
+                        <div className="font-bold text-slate-900 text-xs">{c.name}</div>
+                        {c.notes && <div className="text-[10px] text-slate-400 font-mono truncate max-w-xs">{c.notes}</div>}
                       </td>
-                      <td className="py-3.5 px-4">{getCustomerTypeBadge(c.customer_type)}</td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-2.5 px-3.5">{getCustomerTypeBadge(c.customer_type)}</td>
+                      <td className="py-2.5 px-3.5">
                         <div className="flex flex-col gap-0.5 text-xs text-slate-600">
                           {c.phone ? (
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1 font-mono text-[11px] text-slate-700">
                               <Phone className="w-3 h-3 text-slate-400" />
                               {c.phone}
                             </span>
                           ) : (
-                            <span className="text-slate-400 italic">No phone</span>
+                            <span className="text-slate-400 italic text-[11px]">Unlisted</span>
                           )}
                           {c.address && (
-                            <span className="flex items-center gap-1 text-slate-500">
-                              <MapPin className="w-3 h-3 text-slate-400" />
+                            <span className="flex items-center gap-1 text-slate-500 text-[10px]">
+                              <MapPin className="w-2.5 h-2.5 text-slate-400" />
                               {c.address}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-medium text-slate-600">
+                      <td className="py-2.5 px-3.5 text-right font-mono font-medium text-slate-600 tabular-nums">
                         {c.credit_limit > 0 ? `${c.credit_limit.toLocaleString()} ETB` : 'No Limit'}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-2.5 px-3.5 text-right font-mono tabular-nums">
                         <span
-                          className={`font-bold inline-block px-2.5 py-1 rounded-lg text-xs ${
+                          className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded text-[10px] ${
                             hasDebt
                               ? isOverLimit
                                 ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                : 'bg-amber-100 text-amber-800'
-                              : 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           }`}
                         >
+                          <span className={`w-1.5 h-1.5 rounded-full ${hasDebt ? (isOverLimit ? 'bg-rose-600' : 'bg-amber-600') : 'bg-emerald-600'}`}></span>
                           {hasDebt ? `${c.current_balance.toLocaleString()} ETB` : 'Settled (0)'}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right text-xs font-semibold text-slate-600">
+                      <td className="py-2.5 px-3.5 text-right font-mono text-xs font-semibold text-slate-600 tabular-nums">
                         {c.total_orders_count || 0} orders
                       </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="py-2.5 px-3.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
                           {hasDebt && (
                             <button
                               onClick={() => openRepaymentModal(c)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center gap-1"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition-all shadow-2xs flex items-center gap-1"
                             >
                               <DollarSign className="w-3 h-3" />
-                              Collect
+                              <span>Collect</span>
                             </button>
                           )}
                           <button
                             onClick={() => openHistoryModal(c)}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors title='Account History'"
+                            className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 rounded transition-colors"
+                            title="Account Audit History"
                           >
-                            <History className="w-4 h-4" />
+                            <History className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -610,8 +620,8 @@ export const CustomersPage: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Payment Method *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['CASH', 'TELEBIRR', 'BANK_TRANSFER'] as PaymentMethod[]).map((method) => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(['CASH', 'TELEBIRR', 'EBIRR', 'BANK_TRANSFER'] as PaymentMethod[]).map((method) => (
                     <button
                       key={method}
                       type="button"
@@ -622,7 +632,7 @@ export const CustomersPage: React.FC = () => {
                           : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
-                      {method === 'BANK_TRANSFER' ? 'CBE / Bank' : method}
+                      {method === 'BANK_TRANSFER' ? 'CBE / Bank' : method === 'TELEBIRR' ? 'Telebirr' : method === 'EBIRR' ? 'E-Birr' : method}
                     </button>
                   ))}
                 </div>

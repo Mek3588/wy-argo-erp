@@ -613,50 +613,60 @@ export const SalesPage: React.FC = () => {
   const dailyTotalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* 1. Industrial Header Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Sales & Daily Billing</h2>
-          <p className="text-sm text-slate-500">
-            Process orders, filter daily sales by category, export to Excel, and manage mistake edits.
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-xs font-mono font-bold uppercase text-slate-500 tracking-wider">
+              POINT OF SALE & ACCOUNTS RECEIVABLE
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-xs font-mono text-blue-600 font-semibold">Active Counter</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+            Sales Counter, POS & Settlement Registry
+          </h2>
+          <p className="text-xs text-slate-500">
+            Process direct customer orders, manage credit accounts, audit receipts, and export verified ledger records.
           </p>
         </div>
 
         {/* Tab switch */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 font-mono text-xs">
           <button
             onClick={() => setActiveTab('pos')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md font-bold transition-all ${
               activeTab === 'pos'
-                ? 'bg-white text-blue-600 shadow-xs'
+                ? 'bg-blue-600 text-white shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            POS Counter
+            <span>POS Register</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md font-bold transition-all ${
               activeTab === 'history'
-                ? 'bg-white text-blue-600 shadow-xs'
+                ? 'bg-blue-600 text-white shadow-2xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Receipt className="w-3.5 h-3.5" />
-            Daily Sales & Receipts ({sales.length})
+            <span>Sales Archive ({sales.length})</span>
           </button>
         </div>
       </div>
 
       {/* POS REGISTER */}
       {activeTab === 'pos' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left: Product Catalog */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="lg:col-span-7 space-y-3.5">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
                 placeholder="Search dairy items to sell..."
@@ -973,8 +983,8 @@ export const SalesPage: React.FC = () => {
               {/* Payment Method */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">Payment Method</label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'CREDIT'] as PaymentMethod[]).map((m) => (
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {(['CASH', 'TELEBIRR', 'EBIRR', 'BANK_TRANSFER', 'CREDIT'] as PaymentMethod[]).map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -987,7 +997,7 @@ export const SalesPage: React.FC = () => {
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {m === 'BANK_TRANSFER' ? 'Bank CBE' : m === 'TELEBIRR' ? 'Telebirr' : m === 'CREDIT' ? 'On Credit' : m}
+                      {m === 'BANK_TRANSFER' ? 'Bank CBE' : m === 'TELEBIRR' ? 'Telebirr' : m === 'EBIRR' ? 'E-Birr' : m === 'CREDIT' ? 'On Credit' : m}
                     </button>
                   ))}
                 </div>
@@ -1042,6 +1052,7 @@ export const SalesPage: React.FC = () => {
                         >
                           <option value="CASH">Cash</option>
                           <option value="TELEBIRR">Telebirr</option>
+                          <option value="EBIRR">E-Birr</option>
                           <option value="BANK_TRANSFER">Bank CBE</option>
                         </select>
                       </div>
@@ -1217,60 +1228,60 @@ export const SalesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Sales Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          {/* Sales Data Grid */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold border-b border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Receipt & Date</th>
-                    <th className="py-3 px-4">Customer & Channel</th>
-                    <th className="py-3 px-4">Products Sold</th>
-                    <th className="py-3 px-4">Payment & Status</th>
-                    <th className="py-3 px-4 text-right">Total & Balance</th>
-                    <th className="py-3 px-4 text-center">Finance Status</th>
-                    <th className="py-3 px-4 text-center">Actions</th>
+                    <th className="py-2.5 px-3.5 font-mono">Receipt / Code</th>
+                    <th className="py-2.5 px-3.5">Customer & Channel</th>
+                    <th className="py-2.5 px-3.5">Products Dispatched</th>
+                    <th className="py-2.5 px-3.5">Payment Method</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Amount Settled</th>
+                    <th className="py-2.5 px-3.5 text-center">Finance Status</th>
+                    <th className="py-2.5 px-3.5 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {sales.map((s) => {
                     const hasDebt = (s.due_amount || 0) > 0;
                     return (
-                      <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={s.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
                         {/* 1. Receipt & Date */}
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3.5">
                           <button
                             type="button"
                             onClick={() => viewSaleDetails(s)}
-                            className="font-mono font-bold text-blue-600 hover:text-blue-800 text-xs block text-left"
+                            className="font-mono font-bold text-blue-700 hover:text-blue-900 text-xs bg-blue-50/70 border border-blue-200/50 px-1.5 py-0.5 rounded block text-left"
                             title="Click to view full receipt & details"
                           >
                             {s.sale_code}
                           </button>
-                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                          <span className="text-[10px] text-slate-400 font-mono block mt-1">
                             {s.created_at}
                           </span>
                         </td>
 
                         {/* 2. Customer & Channel */}
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3.5">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-900 text-xs">
+                            <span className="font-bold text-slate-900 text-xs">
                               {s.customer_name}
                             </span>
                             {s.customer_id ? (
-                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                Reg
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                REG
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-500">
-                                Walk-in
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-medium bg-slate-100 text-slate-500">
+                                WALKIN
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             {s.customer_phone && (
-                              <span className="text-[11px] text-slate-400 font-mono">
+                              <span className="text-[10px] text-slate-400 font-mono">
                                 {s.customer_phone}
                               </span>
                             )}
@@ -1281,7 +1292,7 @@ export const SalesPage: React.FC = () => {
                         </td>
 
                         {/* 3. Products Sold */}
-                        <td className="py-3 px-4 max-w-[240px]">
+                        <td className="py-2.5 px-3.5 max-w-[240px]">
                           <div
                             className="text-xs font-medium text-slate-800 line-clamp-2 leading-relaxed"
                             title={s.items_summary || ''}
@@ -1291,30 +1302,30 @@ export const SalesPage: React.FC = () => {
                         </td>
 
                         {/* 4. Payment & Status */}
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                              {s.payment_method}
+                            <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-slate-100 text-slate-700 border border-slate-200">
+                              {s.payment_method === 'BANK_TRANSFER' ? 'Bank CBE' : s.payment_method === 'TELEBIRR' ? 'Telebirr' : s.payment_method === 'EBIRR' ? 'E-Birr' : s.payment_method}
                             </span>
                             {s.payment_status === 'PAID' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Paid
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1 h-1 rounded-full bg-emerald-600"></span> Paid
                               </span>
                             ) : s.payment_status === 'PARTIALLY_PAID' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                Partial
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="w-1 h-1 rounded-full bg-amber-600"></span> Partial
                               </span>
                             ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                Credit
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <span className="w-1 h-1 rounded-full bg-rose-600"></span> Credit
                               </span>
                             )}
                           </div>
                         </td>
 
                         {/* 5. Total & Balance */}
-                        <td className="py-3 px-4 text-right">
-                          <div className="font-bold text-slate-900 text-xs font-mono">
+                        <td className="py-2.5 px-3.5 text-right font-mono">
+                          <div className="font-bold text-slate-900 text-xs tabular-nums">
                             {s.total_amount.toLocaleString()} ETB
                           </div>
                           {hasDebt ? (
@@ -1419,7 +1430,7 @@ export const SalesPage: React.FC = () => {
                   </span>
                   <div className="flex items-center justify-end gap-1.5 mt-1.5">
                     <span className="px-2 py-0.5 rounded font-semibold text-[11px] bg-slate-100 text-slate-700 border border-slate-200">
-                      {selectedSale.payment_method}
+                      {selectedSale.payment_method === 'BANK_TRANSFER' ? 'Bank CBE' : selectedSale.payment_method === 'TELEBIRR' ? 'Telebirr' : selectedSale.payment_method === 'EBIRR' ? 'E-Birr' : selectedSale.payment_method}
                     </span>
                     <span
                       className={`px-2 py-0.5 rounded font-bold text-[11px] ${
@@ -1671,6 +1682,7 @@ export const SalesPage: React.FC = () => {
               >
                 <option value="CASH">Cash</option>
                 <option value="TELEBIRR">Telebirr</option>
+                <option value="EBIRR">E-Birr</option>
                 <option value="BANK_TRANSFER">Bank (CBE)</option>
                 <option value="CREDIT">Credit</option>
               </select>
@@ -1950,6 +1962,7 @@ export const SalesPage: React.FC = () => {
                 >
                   <option value="CASH">Cash</option>
                   <option value="TELEBIRR">Telebirr</option>
+                  <option value="EBIRR">E-Birr</option>
                   <option value="BANK_TRANSFER">Bank CBE</option>
                 </select>
               </div>

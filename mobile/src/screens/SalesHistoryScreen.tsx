@@ -123,6 +123,7 @@ export const SalesHistoryScreen: React.FC = () => {
     setEditCategory(sale.sale_category || 'Retail / Walk-in');
     let pm = (sale.payment_method || 'CASH').toUpperCase();
     if (pm === 'CBE' || pm === 'BANK') pm = 'BANK_TRANSFER';
+    if (pm === 'E_BIRR' || pm === 'E-BIRR' || pm === 'EB' || pm === 'E BIRR') pm = 'EBIRR';
     setEditPaymentMethod(pm);
     setEditNotes(sale.notes || '');
   };
@@ -388,6 +389,7 @@ export const SalesHistoryScreen: React.FC = () => {
                     {[
                       { id: 'CASH', label: 'Cash' },
                       { id: 'TELEBIRR', label: 'Telebirr' },
+                      { id: 'EBIRR', label: 'E-Birr' },
                       { id: 'BANK_TRANSFER', label: 'CBE Bank' },
                       { id: 'CREDIT', label: 'Credit' },
                     ].map((m) => {

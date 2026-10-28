@@ -215,8 +215,10 @@ router.post('/:id/payments', authorizeRoles('ADMIN', 'MANAGER', 'SALES_CASHIER')
     let rawMethod = String(payment_method || 'CASH').toUpperCase();
     if (rawMethod === 'CBE' || rawMethod === 'BANK') {
       rawMethod = 'BANK_TRANSFER';
+    } else if (rawMethod === 'E_BIRR' || rawMethod === 'E-BIRR' || rawMethod === 'EB' || rawMethod === 'E BIRR') {
+      rawMethod = 'EBIRR';
     }
-    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER'];
+    const validMethods = ['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR'];
     const finalMethod = validMethods.includes(rawMethod) ? rawMethod : 'CASH';
 
     const executePayment = db.transaction(() => {

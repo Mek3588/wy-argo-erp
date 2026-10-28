@@ -27,6 +27,7 @@ interface CartItem {
 const PAYMENT_METHODS = [
   { id: 'CASH', label: 'Cash', icon: 'cash-outline', color: '#10b981' },
   { id: 'TELEBIRR', label: 'Telebirr', icon: 'phone-portrait-outline', color: '#0ea5e9' },
+  { id: 'EBIRR', label: 'E-Birr', icon: 'phone-portrait-outline', color: '#f97316' },
   { id: 'BANK_TRANSFER', label: 'CBE Bank', icon: 'card-outline', color: '#8b5cf6' },
   { id: 'CREDIT', label: 'Credit', icon: 'wallet-outline', color: '#f59e0b' },
 ];

@@ -126,7 +126,7 @@ export interface CustomerPayment {
   created_at: string;
 }
 
-export type PaymentMethod = 'CASH' | 'TELEBIRR' | 'BANK_TRANSFER' | 'CREDIT';
+export type PaymentMethod = 'CASH' | 'TELEBIRR' | 'EBIRR' | 'BANK_TRANSFER' | 'CREDIT';
 
 export interface SaleItem {
   id?: number;

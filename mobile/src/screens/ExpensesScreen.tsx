@@ -251,7 +251,7 @@ export const ExpensesScreen: React.FC = () => {
               {/* Payment Method */}
               <Text style={styles.inputLabel}>Paid From *</Text>
               <View style={styles.payMethodsRow}>
-                {['cash', 'telebirr', 'cbe', 'other'].map((m) => (
+                {['cash', 'telebirr', 'ebirr', 'cbe'].map((m) => (
                   <TouchableOpacity
                     key={m}
                     style={[

@@ -281,139 +281,157 @@ export const InventoryPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* 1. Industrial Header Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Dairy Inventory & Stock</h2>
-          <p className="text-sm text-slate-500">
-            Monitor current physical stock on hand, record restocks, and log count adjustments.
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            <span className="text-xs font-mono font-bold uppercase text-slate-500 tracking-wider">
+              COLD CHAIN LOGISTICS
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="text-xs font-mono text-emerald-600 font-semibold">Physical Stock Registry</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+            Dairy Inventory & Batch Stock Control
+          </h2>
+          <p className="text-xs text-slate-500">
+            Monitor real-time warehouse stock on hand, record supplier intakes, and audit count adjustments.
           </p>
         </div>
 
         {canEdit && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center flex-wrap gap-2">
             <button
               onClick={() => setIsStockInModalOpen(true)}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold text-xs transition-all shadow-xs"
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-2xs transition-colors"
             >
-              <ArrowDownCircle className="w-4 h-4" />
-              Stock In
+              <ArrowDownCircle className="w-3.5 h-3.5" />
+              <span>Stock-In Intake</span>
             </button>
             <button
               onClick={() => setIsAdjustModalOpen(true)}
-              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl font-semibold text-xs transition-all border border-slate-200"
+              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-bold text-xs border border-slate-200 transition-colors"
             >
-              <SlidersHorizontal className="w-4 h-4" />
-              Adjust Stock
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+              <span>Audit Adjust</span>
             </button>
             <button
               onClick={openCreateProduct}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-semibold text-xs transition-all shadow-xs"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-2xs transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              New Product
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Product</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto">
+      {/* 2. Enterprise Navigation Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-2 rounded-t-xl overflow-x-auto shadow-2xs">
         <button
           onClick={() => setActiveSubTab('products')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 px-4 py-3 font-mono font-bold text-xs border-b-2 transition-all shrink-0 ${
             activeSubTab === 'products'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/30'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Package className="w-4 h-4" />
-          Products & Stock on Hand ({products.length})
+          <span>Products & Physical Stock ({products.length})</span>
         </button>
         <button
           onClick={() => setActiveSubTab('batches')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 px-4 py-3 font-mono font-bold text-xs border-b-2 transition-all shrink-0 ${
             activeSubTab === 'batches'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/30'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Layers className="w-4 h-4" />
-          Fresh Batches & Suppliers ({batches.length})
+          <span>Intake Batches & Traceability ({batches.length})</span>
         </button>
         <button
           onClick={() => setActiveSubTab('suppliers')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 px-4 py-3 font-mono font-bold text-xs border-b-2 transition-all shrink-0 ${
             activeSubTab === 'suppliers'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/30'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <Truck className="w-4 h-4" />
-          Suppliers Directory ({suppliers.length})
+          <span>Suppliers Directory ({suppliers.length})</span>
         </button>
         <button
           onClick={() => setActiveSubTab('logs')}
-          className={`flex items-center gap-2 px-4 py-3 font-semibold text-sm border-b-2 transition-all shrink-0 ${
+          className={`flex items-center gap-2 px-4 py-3 font-mono font-bold text-xs border-b-2 transition-all shrink-0 ${
             activeSubTab === 'logs'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/30'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           <History className="w-4 h-4" />
-          Stock Movement Log
+          <span>Movement Audit Log</span>
         </button>
       </div>
 
       {/* TAB 1: PRODUCTS & STOCK */}
       {activeSubTab === 'products' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+        <div className="space-y-3.5">
+          {/* Integrated Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
             <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search by name or SKU..."
+                placeholder="Search name or SKU code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                className="w-full pl-9 pr-4 py-1.5 border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono"
               />
             </div>
 
-            {/* Category filter pills */}
-            <div className="flex flex-wrap gap-1.5 w-full sm:w-auto">
-              {['ALL', 'Milk', 'Cheese', 'Butter', 'Yogurt', 'Cream'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    selectedCategory === cat
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            {/* Category Filter Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+              {['ALL', 'Milk', 'Cheese', 'Butter', 'Yogurt', 'Cream'].map((cat) => {
+                const count = cat === 'ALL' ? products.length : products.filter((p) => p.category === cat).length;
+                const isSelected = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold font-mono transition-all flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{cat}</span>
+                    <span className={`text-[10px] px-1 py-0.2 rounded ${isSelected ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Products Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          {/* Products Data Grid */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">SKU & Product Name</th>
-                    <th className="py-3 px-4">Category</th>
-                    <th className="py-3 px-4">Unit Cost</th>
-                    <th className="py-3 px-4">Selling Price</th>
-                    <th className="py-3 px-4">Reorder Level</th>
-                    <th className="py-3 px-4 text-right">Current Stock</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    {canEdit && <th className="py-3 px-4 text-center">Actions</th>}
+                    <th className="py-2.5 px-3.5 font-mono">SKU / Code</th>
+                    <th className="py-2.5 px-3.5">Product Name</th>
+                    <th className="py-2.5 px-3.5">Category</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Unit Cost</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Selling Price</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Safety Point</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">On Hand Stock</th>
+                    <th className="py-2.5 px-3.5 text-center">Status</th>
+                    {canEdit && <th className="py-2.5 px-3.5 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -422,38 +440,47 @@ export const InventoryPage: React.FC = () => {
                     const isOut = (p.current_stock ?? 0) === 0;
 
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-900">{p.name}</div>
-                          <div className="font-mono text-xs text-blue-600">{p.sku}</div>
+                      <tr key={p.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
+                        <td className="py-2.5 px-3.5">
+                          <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50/80 border border-blue-200/60 px-1.5 py-0.5 rounded">
+                            {p.sku}
+                          </span>
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                        <td className="py-2.5 px-3.5">
+                          <div className="font-bold text-slate-900 text-xs">{p.name}</div>
+                          {p.description && <div className="text-[10px] text-slate-400 truncate max-w-xs">{p.description}</div>}
+                        </td>
+                        <td className="py-2.5 px-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">
                             {p.category}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono text-slate-600">{p.unit_cost} ETB</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">{p.unit_price} ETB</td>
-                        <td className="py-3 px-4 text-slate-600 font-mono">
+                        <td className="py-2.5 px-3.5 text-right font-mono text-slate-600 font-semibold tabular-nums">
+                          {p.unit_cost.toFixed(2)} ETB
+                        </td>
+                        <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900 tabular-nums">
+                          {p.unit_price.toFixed(2)} ETB
+                        </td>
+                        <td className="py-2.5 px-3.5 text-right text-slate-500 font-mono tabular-nums">
                           {p.min_stock_level} {p.unit}
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="text-base font-bold text-slate-900">
-                            {p.current_stock ?? 0} {p.unit}
+                        <td className="py-2.5 px-3.5 text-right">
+                          <div className={`text-sm font-black font-mono tabular-nums ${isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-slate-900'}`}>
+                            {p.current_stock ?? 0} <span className="text-[10px] font-normal text-slate-500 font-sans">{p.unit}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-2.5 px-3.5 text-center">
                           {isOut ? (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                              Out of Stock
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span> Stockout
                             </span>
                           ) : isLow ? (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                              Low Stock
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span> Low Stock
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              In Stock
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Nominal
                             </span>
                           )}
                         </td>
@@ -500,66 +527,67 @@ export const InventoryPage: React.FC = () => {
 
       {/* TAB 2: FRESH BATCHES & TRACEABILITY */}
       {activeSubTab === 'batches' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Batch Number</th>
-                  <th className="py-3 px-4">Product</th>
-                  <th className="py-3 px-4">Supplier / Producer</th>
-                  <th className="py-3 px-4">Production Date</th>
-                  <th className="py-3 px-4">Expiry Date</th>
-                  <th className="py-3 px-4 text-right">Available Qty</th>
-                  <th className="py-3 px-4 text-right">Unit Cost</th>
-                  <th className="py-3 px-4 text-center">Status</th>
+                  <th className="py-2.5 px-3.5 font-mono">Batch Number</th>
+                  <th className="py-2.5 px-3.5">Product Name</th>
+                  <th className="py-2.5 px-3.5">Producer / Supplier</th>
+                  <th className="py-2.5 px-3.5">Intake Date</th>
+                  <th className="py-2.5 px-3.5">Shelf Expiry</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Available Units</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Unit Cost</th>
+                  <th className="py-2.5 px-3.5 text-center">Batch Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {batches.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400">
-                      No batch intakes recorded yet.
+                    <td colSpan={8} className="py-8 text-center text-slate-400 font-mono text-xs">
+                      No batch intakes recorded in the system yet.
                     </td>
                   </tr>
                 ) : (
                   batches.map((b) => (
-                    <tr key={b.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono text-xs font-bold text-blue-600">
+                    <tr key={b.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
+                      <td className="py-2.5 px-3.5 font-mono text-xs font-bold text-blue-700">
                         {b.batch_number}
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900">{b.product_name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{b.product_sku}</div>
+                      <td className="py-2.5 px-3.5">
+                        <div className="font-bold text-slate-900">{b.product_name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{b.product_sku}</div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-slate-800">
-                          {b.supplier_full_name || b.supplier_name || 'In-House Farm'}
+                      <td className="py-2.5 px-3.5">
+                        <div className="font-bold text-slate-800">
+                          {b.supplier_full_name || b.supplier_name || 'In-House Plant Chiller'}
                         </div>
                         {b.supplier_phone && (
-                          <div className="text-[11px] text-slate-400">{b.supplier_phone}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{b.supplier_phone}</div>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-600">{b.production_date}</td>
-                      <td className="py-3 px-4 text-xs text-slate-600">
-                        {b.expiry_date === '2099-12-31' ? 'Standard Shelf' : b.expiry_date}
+                      <td className="py-2.5 px-3.5 text-xs text-slate-600 font-mono">{b.production_date}</td>
+                      <td className="py-2.5 px-3.5 text-xs text-slate-600 font-mono">
+                        {b.expiry_date === '2099-12-31' ? 'Standard Storage' : b.expiry_date}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-900 font-mono">
-                        {b.current_quantity} / {b.initial_quantity} {b.product_unit}
+                      <td className="py-2.5 px-3.5 text-right font-bold text-slate-900 font-mono tabular-nums">
+                        {b.current_quantity} / {b.initial_quantity} <span className="text-[10px] text-slate-500 font-sans">{b.product_unit}</span>
                       </td>
-                      <td className="py-3 px-4 text-right text-slate-600 font-mono text-xs">
-                        {b.cost_per_unit} ETB
+                      <td className="py-2.5 px-3.5 text-right text-slate-700 font-mono text-xs tabular-nums font-semibold">
+                        {b.cost_per_unit.toFixed(2)} ETB
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2.5 px-3.5 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                             b.status === 'ACTIVE'
-                              ? 'bg-emerald-100 text-emerald-800'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                               : b.status === 'DEPLETED'
-                              ? 'bg-slate-100 text-slate-600'
-                              : 'bg-rose-100 text-rose-800'
+                              ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                              : 'bg-rose-100 text-rose-800 border border-rose-200'
                           }`}
                         >
+                          <span className={`w-1.5 h-1.5 rounded-full ${b.status === 'ACTIVE' ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
                           {b.status}
                         </span>
                       </td>
@@ -574,57 +602,57 @@ export const InventoryPage: React.FC = () => {
 
       {/* TAB 3: SUPPLIERS DIRECTORY */}
       {activeSubTab === 'suppliers' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200">
+        <div className="space-y-3.5">
+          <div className="flex justify-between items-center bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Raw Milk Suppliers & Vendor Partners</h3>
-              <p className="text-xs text-slate-500">Farmers, collection outgrowers, and packaging distributors.</p>
+              <h3 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">Raw Milk Producers & Vendor Directory</h3>
+              <p className="text-xs text-slate-500">Farmers, collection centers, and dairy packaging suppliers.</p>
             </div>
             {canEdit && (
               <button
                 onClick={() => setIsSupplierModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Add Supplier
+                <span>Register Supplier</span>
               </button>
             )}
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Supplier Name</th>
-                    <th className="py-3 px-4">Category</th>
-                    <th className="py-3 px-4">Contact Person & Phone</th>
-                    <th className="py-3 px-4">Location / Address</th>
-                    <th className="py-3 px-4 text-right">Batches Supplied</th>
-                    <th className="py-3 px-4 text-right">Total Units</th>
+                    <th className="py-2.5 px-3.5">Supplier / Business</th>
+                    <th className="py-2.5 px-3.5">Category</th>
+                    <th className="py-2.5 px-3.5">Contact Person & Phone</th>
+                    <th className="py-2.5 px-3.5">Facility Location</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Batches</th>
+                    <th className="py-2.5 px-3.5 text-right font-mono">Total Volume</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {suppliers.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-slate-900">
+                    <tr key={s.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
+                      <td className="py-2.5 px-3.5 font-bold text-slate-900">
                         {s.name}
-                        {s.notes && <div className="text-xs text-slate-400 font-normal">{s.notes}</div>}
+                        {s.notes && <div className="text-[10px] text-slate-400 font-normal">{s.notes}</div>}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <td className="py-2.5 px-3.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {s.category.replace(/_/g, ' ')}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-xs">
-                        <div className="font-medium text-slate-800">{s.contact_person || 'Direct'}</div>
-                        <div className="text-slate-500">{s.phone || '-'}</div>
+                      <td className="py-2.5 px-3.5 text-xs">
+                        <div className="font-semibold text-slate-800">{s.contact_person || 'Direct'}</div>
+                        <div className="text-slate-500 font-mono text-[11px]">{s.phone || '-'}</div>
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-600">{s.address || '-'}</td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700">
+                      <td className="py-2.5 px-3.5 text-xs text-slate-600">{s.address || '-'}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-slate-700 tabular-nums">
                         {s.batches_supplied_count || 0} batches
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900 tabular-nums">
                         {(s.total_units_supplied || 0).toLocaleString()}
                       </td>
                     </tr>
@@ -636,47 +664,47 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: LOGS */}
+      {/* TAB 4: AUDIT LOGS */}
       {activeSubTab === 'logs' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-200">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100/70 text-slate-700 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Movement Type</th>
-                  <th className="py-3 px-4">Product</th>
-                  <th className="py-3 px-4 text-right">Quantity</th>
-                  <th className="py-3 px-4">Reason / Notes</th>
-                  <th className="py-3 px-4">Staff Member</th>
+                  <th className="py-2.5 px-3.5 font-mono">Timestamp</th>
+                  <th className="py-2.5 px-3.5">Movement Type</th>
+                  <th className="py-2.5 px-3.5">Dairy Product</th>
+                  <th className="py-2.5 px-3.5 text-right font-mono">Quantity</th>
+                  <th className="py-2.5 px-3.5">Audit Reason / Voucher</th>
+                  <th className="py-2.5 px-3.5">Operator</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {logs.map((l) => (
-                  <tr key={l.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 text-xs text-slate-500">{l.created_at}</td>
-                    <td className="py-3 px-4">
+                  <tr key={l.id} className="even:bg-slate-50/40 hover:bg-blue-50/40 transition-colors">
+                    <td className="py-2.5 px-3.5 font-mono text-slate-500 text-[11px]">{l.created_at}</td>
+                    <td className="py-2.5 px-3.5">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                           l.type === 'STOCK_IN'
-                            ? 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                             : l.type === 'SALE'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-rose-100 text-rose-800'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            : 'bg-rose-100 text-rose-800 border border-rose-200'
                         }`}
                       >
                         {l.type.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-slate-900">{l.product_name}</div>
+                    <td className="py-2.5 px-3.5 font-bold text-slate-900">
+                      {l.product_name}
                     </td>
-                    <td className="py-3 px-4 text-right font-bold text-slate-900">
+                    <td className={`py-2.5 px-3.5 text-right font-mono font-bold tabular-nums text-xs ${l.type === 'STOCK_IN' ? 'text-emerald-700' : 'text-slate-900'}`}>
                       {l.type === 'STOCK_IN' ? '+' : '-'}
                       {l.quantity} {l.product_unit}
                     </td>
-                    <td className="py-3 px-4 text-xs text-slate-600">{l.reason || '-'}</td>
-                    <td className="py-3 px-4 text-xs font-medium text-slate-800">{l.user_name || 'System'}</td>
+                    <td className="py-2.5 px-3.5 text-slate-600 text-xs">{l.reason || '-'}</td>
+                    <td className="py-2.5 px-3.5 font-mono text-[11px] font-semibold text-slate-800">{l.user_name || 'System Auto'}</td>
                   </tr>
                 ))}
               </tbody>

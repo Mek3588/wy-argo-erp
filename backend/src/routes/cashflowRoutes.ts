@@ -94,10 +94,15 @@ router.post('/transactions', authorizeRoles('ADMIN', 'MANAGER'), (req: AuthReque
       return;
     }
 
+    let normMethod = String(payment_method).toUpperCase();
+    if (normMethod === 'CBE' || normMethod === 'BANK') normMethod = 'BANK_TRANSFER';
+    if (normMethod === 'E_BIRR' || normMethod === 'E-BIRR' || normMethod === 'EB' || normMethod === 'E BIRR') normMethod = 'EBIRR';
+    if (!['CASH', 'TELEBIRR', 'BANK_TRANSFER', 'EBIRR'].includes(normMethod)) normMethod = 'CASH';
+
     const result = db.prepare(`
       INSERT INTO cash_transactions (type, source, amount, payment_method, description, recorded_by_user_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(type, source, numAmount, payment_method, description, req.user?.id);
+    `).run(type, source, numAmount, normMethod, description, req.user?.id);
 
     const created = db.prepare('SELECT * FROM cash_transactions WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Cash transaction recorded', transaction: created });
